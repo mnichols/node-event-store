@@ -41,6 +41,7 @@ describe 'es', ->
                 storage.events['123'][0].streamRevision.should.equal 1
                 done()
             sut.commit [event]
+    
     describe '#through', ->
         it 'should commit events', ->
             events = [

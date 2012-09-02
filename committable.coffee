@@ -1,9 +1,17 @@
 es = require 'event-stream'
 createCommit = (cfg) ->
+    now = new Date()
+    utc = Date.UTC now.getFullYear(), 
+        now.getMonth(), 
+        now.getDate(), 
+        now.getHours(), 
+        now.getMinutes(), 
+        now.getSeconds(),
+        now.getMilliseconds()
     checkRevision: cfg.streamRevision ? 0
     streamId: cfg.streamId        
     streamRevision: (cfg.streamRevision ? 0) + cfg.events.length
-    timestamp: new Date().getTime()
+    timestamp: utc
     headers: []
     payload: cfg.events
 

@@ -8,6 +8,7 @@
     ,"dependencies" : {
         "coffee-script": "latest"
         ,"event-stream": "latest"
+        ,"redis": "latest"
     }
     ,"devDependencies" : {
         "mocha": "latest"
