@@ -7,6 +7,7 @@
     }
     ,"dependencies" : {
         "coffee-script": "latest"
+        ,"event-stream": "latest"
     }
     ,"devDependencies" : {
         "mocha": "latest"
