@@ -9,6 +9,7 @@
         "coffee-script": "latest"
         ,"event-stream": "latest"
         ,"redis": "latest"
+        ,"redis-stream": "latest"
     }
     ,"devDependencies" : {
         "mocha": "latest"

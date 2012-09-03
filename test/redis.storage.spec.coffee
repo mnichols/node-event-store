@@ -99,6 +99,7 @@ describe 'redis storage', ->
                 storage.write commit, (err, result) ->
                     args = ['events:123', 0, 4, 'WITHSCORES']
                     cli.zrangebyscore args, (err, reply) ->
+                        
                         done()
     describe '#write stream with old revision', ->
         it 'should return concurrency error', (done) ->
