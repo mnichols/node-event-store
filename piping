@@ -29,14 +29,14 @@ commit2score => LIST
 commits:123 SORTED SET
     ---score 1
     {
-        commitId: 3 => needed?
+        commitSequence: 3 => needed?
         payload: [...]
         headers: [...]
         timestamp: {...}
     }
     ---score 4
     {
-        commitId: 4 => needed?
+        commitSequence: 4 => needed?
         payload: [3events]
         headers: []
         timestamp: {}
@@ -44,4 +44,8 @@ commits:123 SORTED SET
 
 
 
+reading all events
+1. needs to support time bound streaming
+--- perhaps 'score' for a sorted set could be the Date().getTime()?
+reader.
 

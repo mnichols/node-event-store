@@ -29,7 +29,7 @@ describe 'redis-stream storage', ->
                     {c:3}
                 ]
                 timestamp: new Date(2012,9,1,12,0,0)
-            seed = cli.stream('zadd', 'events:123', 1)
+            seed = cli.stream('zadd', 'commits:123', 1)
             seed.on 'end', ->
                 sut.createStorage cli, (err, storage) ->
                     filter = 
@@ -69,7 +69,7 @@ describe 'redis-stream storage', ->
                     {c:3}
                 ]
                 timestamp: new Date(2012,9,1,12,0,0)
-            seed = cli.stream('zadd', 'events:123', 1)
+            seed = cli.stream('zadd', 'commits:123', 1)
             seed.on 'end', ->
                 sut.createStorage cli, (err, storage) ->
                     filter = 
@@ -105,7 +105,7 @@ describe 'redis-stream storage', ->
                     {c:3}
                 ]
                 timestamp: new Date(2012,9,1,13,0,0)
-            stream = cli.stream 'zadd', 'events:123', 1
+            stream = cli.stream 'zadd', 'commits:123', 1
             stream.on 'end', ->
                 sut.createStorage cli, (err, storage) ->
                     emitter = storage.createCommitter()
@@ -136,7 +136,7 @@ describe 'redis-stream storage', ->
             sut.createStorage cli, (err, storage) ->
                 emitter =  storage.createCommitter()
                 emitter.on 'commit', (data)->
-                    actual = cli.stream 'zrange', 'events:123', 0
+                    actual = cli.stream 'zrange', 'commits:123', 0
                     actual.on 'data', (reply) ->
                         data = JSON.parse(reply)
                         data.should.exist
@@ -168,14 +168,14 @@ describe 'redis-stream storage', ->
                     {c:3}
                 ]
                 timestamp: new Date(2012,9,1,13,0,0)
-            stream = cli.stream 'zadd', 'events:123', 1
+            stream = cli.stream 'zadd', 'commits:123', 1
             stream.on 'end', ->
                 sut.createStorage cli, (err, storage) ->
                     emitter = storage.createCommitter()
                     emitter.on 'error', (err) ->
                         done new Error 'fail'
                     emitter.on 'commit', (data) ->
-                        actual = cli.stream 'zrangebyscore', 'events:123', 0
+                        actual = cli.stream 'zrangebyscore', 'commits:123', 0
                         replies = []
                         actual.on 'end', ->
                             replies.length.should.equal 2
@@ -206,8 +206,8 @@ describe 'redis-stream storage', ->
 
             sut.createStorage cli, (err, storage) ->
                 storage.write commit, (err, result) ->
-                    args = ['events:123', 0, 4]
-                    actual = cli.stream 'zrange', 'events:123', 0
+                    args = ['commits:123', 0, 4]
+                    actual = cli.stream 'zrange', 'commits:123', 0
                     data = null
                     actual.on 'error', (err) ->
                         console.log 'err', err
@@ -242,7 +242,7 @@ describe 'redis-stream storage', ->
                     {c:3}
                 ]
                 timestamp: new Date(2012,9,1,13,0,0)
-            stream = cli.stream 'zadd', 'events:123', 1
+            stream = cli.stream 'zadd', 'commits:123', 1
             stream.on 'end', ->
                 sut.createStorage cli, (err, storage) ->
                     storage.write commit, (err, result) ->
@@ -274,11 +274,11 @@ describe 'redis-stream storage', ->
                     {c:3}
                 ]
                 timestamp: new Date(2012,9,1,13,0,0)
-            stream = cli.stream 'zadd', 'events:123', 1
+            stream = cli.stream 'zadd', 'commits:123', 1
             stream.on 'end', ->
                 sut.createStorage cli, (err, storage) ->
                     storage.write commit, (err, result) ->
-                        actual = cli.stream 'zrangebyscore', 'events:123', 0
+                        actual = cli.stream 'zrangebyscore', 'commits:123', 0
                         replies = []
                         actual.on 'end', ->
                             replies.length.should.equal 2

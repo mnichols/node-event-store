@@ -3,7 +3,7 @@ Redis = require 'redis-stream'
 {EventEmitter} = require 'events'
 util = require 'util'
 
-getEventsKey =  (streamId) -> "events:#{streamId}"
+getCommitsKey =  (streamId) -> "commits:#{streamId}"
 module.exports = 
     createStorage: (client, cb) ->
         ConcurrencyError = ->
@@ -32,8 +32,19 @@ module.exports =
                         e
                     next null, events
 
+                ###
+                *Begins stream events
+                *@method read
+                *@param {Object} filter The definition for the stream
+                *    @param {String} streamId The id for the stream
+                *    @param {Number} [minRevision=0] The minimum revision to start stream at
+                *    @param {Number} [maxRevision=Number.MAX_VALUE] The max revision
+                *@param {Object} [opts]
+                *    @param {Boolean} [flatten=true] Emit events one at a time from 
+                *        underlying payload of each commit
+                ###
                 reader.read = (filter, opts={flatten:true}) ->
-                    id = getEventsKey(filter.streamId)
+                    id = getCommitsKey(filter.streamId)
                     finish = if opts.flatten then flatten else reader
                     streams = [
                         client.stream('zrangebyscore', id, filter.minRevision)
@@ -53,7 +64,7 @@ module.exports =
 
             createCommitter: ->
                 emitter = es.map (commit, next) ->
-                    id = getEventsKey(commit.streamId)
+                    id = getCommitsKey(commit.streamId)
                     writer = client.stream('zadd',id,commit.streamRevision)
                     maxRevision = client.stream('zrevrange',id,0,1)
                     validate = es.map (data, next) ->
