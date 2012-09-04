@@ -103,47 +103,11 @@ module.exports =
                     
 
             write: (commit, callback) ->
-                id = getEventsKey(commit.streamId)
-                concurrency = client.stream()
-                check = (data, next) ->
-                    score = Number(data)
-                    #first record is likely the actual object
-                    return if isNaN score 
-                    return next null, null if score == commit.checkRevision
-                    next new ConcurrencyError()
-
-                
-                writeCommit = (data, next) ->
-                    reply = null
-                    writer = client.stream 'zadd', id, commit.streamRevision
-                    writer.on 'data', (data) ->
-                        reply = JSON.parse data
-                    writer.on 'end', ->
-                        callback null, reply
-                    #dont need to persist our check
-                    delete commit.checkRevision
-                    writer.write JSON.stringify commit
-                    writer.end()
-
-                finish = writeCommit
-
-                concurrency.on 'data', (reply) ->
-                    score = Number(reply)
-                    #first record is likely the actual object
-                    return if isNaN score 
-                    return if score == commit.checkRevision
-                    finish = -> callback new ConcurrencyError()
-                
-                concurrency.on 'end', ->
-                    finish()
-
-                concurrency.redis.write Redis.parse [
-                    'zrevrange'
-                    id
-                    0
-                    1
-                    'WITHSCORES'
-                ]
-                concurrency.end()
+                committer = @createCommitter()
+                committer.on 'commit', (data) -> 
+                    callback null, data
+                committer.on 'error', (err) ->
+                    callback err
+                return committer.write commit
         cb null, new Storage()
 
