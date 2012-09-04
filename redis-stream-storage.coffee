@@ -38,7 +38,7 @@ module.exports =
                     streams = [
                         client.stream('zrangebyscore', id, filter.minRevision)
                         es.parse()
-                        flatten
+                        finish
                     ]
                     pipe = es.pipeline.apply @, streams
                     #proxy stream commands to our pipe
@@ -50,22 +50,6 @@ module.exports =
                     pipe.write filter.maxRevision
                     pipe.end()
                 reader
-
-            read: (filter, callback) ->
-                reader = @createReader()
-                events = []
-                reader.on 'error', => 
-                    events = []
-                    callback.apply  @, arguments
-                reader.on 'data', (data) =>
-                    concat events, data
-                reader.on 'end', =>
-                    args = slice.call arguments
-                    args.unshift events
-                    args.unshift null
-                    callback.apply @, args
-                reader.read filter
-
 
             createCommitter: ->
                 emitter = es.map (commit, next) ->
@@ -103,6 +87,21 @@ module.exports =
                     ck.write 'WITHSCORES'
                     ck.end()
                     
+
+            read: (filter, callback) ->
+                reader = @createReader()
+                events = []
+                reader.on 'error', => 
+                    events = []
+                    callback.apply  @, arguments
+                reader.on 'data', (data) =>
+                    concat events, data
+                reader.on 'end', =>
+                    args = slice.call arguments
+                    args.unshift events
+                    args.unshift null
+                    callback.apply @, args
+                reader.read filter
 
             write: (commit, callback) ->
                 committer = @createCommitter()
