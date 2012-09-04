@@ -8,6 +8,7 @@
     ,"dependencies" : {
         "coffee-script": "latest"
         ,"event-stream": "latest"
+        ,"map-stream": "latest"
         ,"redis": "latest"
         ,"redis-stream": "latest"
     }
