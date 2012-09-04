@@ -15,56 +15,58 @@ module.exports =
         isNumber = (obj) ->
             toString.call(obj)=='[object Number]'
 
+        slice = Array::slice
+        concat = (target=[], data=[]) -> Array::push.apply target, data
+
         Storage = ->
             EventEmitter.call @
             util.inherits Storage, EventEmitter
+            createReader: ->
+                reader = es.map (data, next) ->
+                    next null, data
+                
+                flatten = es.map (data, next) ->
+                    return next() unless data?.payload
+                    events = data.payload.map (e) ->
+                        (e[k]=data[k]) for k,v of data when k!='payload'
+                        e
+                    next null, events
+
+                reader.read = (filter, opts={flatten:true}) ->
+                    id = getEventsKey(filter.streamId)
+                    finish = if opts.flatten then flatten else reader
+                    streams = [
+                        client.stream('zrangebyscore', id, filter.minRevision)
+                        es.parse()
+                        flatten
+                    ]
+                    pipe = es.pipeline.apply @, streams
+                    #proxy stream commands to our pipe
+                    reader.pause = pipe.pause
+                    reader.resume = pipe.resume
+                    #proxy events from pipe to reader
+                    pipe.emit = -> reader.emit.apply reader, arguments
+                    #we have to pass an arg in to the underlying redis-stream
+                    pipe.write filter.maxRevision
+                    pipe.end()
+                reader
+
             read: (filter, callback) ->
-                id = getEventsKey(filter.streamId)
-                reader = client.stream()
-                err = null
+                reader = @createReader()
                 events = []
-                push = (moreEvents=[]) -> Array::push.apply events, moreEvents
-                reader.on 'end', -> 
-                    callback err, events
-                reader.on 'data', (data) ->
-                    obj = JSON.parse data
-                    push obj.payload
-
-                reader.on 'error', (error) -> 
-                    console.error error
-                    err = error
-                reader.redis.write Redis.parse [
-                    'zrangebyscore'
-                    id
-                    filter.minRevision
-                    filter.maxRevision ? -1
-                ]
-                reader.end()
+                reader.on 'error', => 
+                    events = []
+                    callback.apply  @, arguments
+                reader.on 'data', (data) =>
+                    concat events, data
+                reader.on 'end', =>
+                    args = slice.call arguments
+                    args.unshift events
+                    args.unshift null
+                    callback.apply @, args
+                reader.read filter
 
 
-            writeStream: (commit, callback) ->
-                id = getEventsKey(commit.streamId)
-                reply = null
-                concurrency = client.stream 'zrevrange', id, 0, 1
-                check = (data, next) ->
-                    return next data if ~data.indexOf '-ERR'
-                    score = Number(data)
-                    #first record is likely the actual object
-                    return next() if isNaN score 
-                    if score == commit.checkRevision
-                        return next null, JSON.stringify(commit)
-                    next new ConcurrencyError()
-                writer = client.stream('zadd', id, commit.streamRevision)
-                respond = (data, next) ->
-                    reply = JSON.parse data
-                    next null, reply
-
-                pipe = es.pipe(concurrency, es.map(check), writer, es.map(respond))
-
-                pipe.on 'error', callback
-                pipe.on 'end', -> callback null, reply
-                pipe.write 'WITHSCORES'
-                pipe.end()
             createCommitter: ->
                 emitter = es.map (commit, next) ->
                     id = getEventsKey(commit.streamId)
@@ -104,10 +106,12 @@ module.exports =
 
             write: (commit, callback) ->
                 committer = @createCommitter()
-                committer.on 'commit', (data) -> 
-                    callback null, data
-                committer.on 'error', (err) ->
-                    callback err
+                committer.on 'commit', =>
+                    args = slice.call arguments
+                    args.unshift null
+                    callback.apply @, args
+                committer.on 'error', (err) =>
+                    callback.apply @, arguments
                 return committer.write commit
         cb null, new Storage()
 
