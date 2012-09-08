@@ -1,10 +1,14 @@
 describe 'redis-stream storage', ->
     cli = null
+    cfg = null
     Redis = require 'redis-stream'
     es = require 'event-stream'
     redisStorage = require '../redis-stream-storage'
     beforeEach (done) ->
-        cli = new Redis 6379, 'localhost', 11
+        (cli = new Redis 6379, 'localhost', 11)
+        cfg =
+            id: 'myhairystorage'
+            client: cli
         done()
 
     afterEach (done) ->
@@ -18,6 +22,7 @@ describe 'redis-stream storage', ->
 
     describe '#reader-stream', ->
         it 'should read all events', (done) ->
+            @timeout(100)
             sut = redisStorage
             commit1 =
                 headers: []
@@ -31,10 +36,10 @@ describe 'redis-stream storage', ->
                 timestamp: new Date(2012,9,1,12,0,0)
             seed = cli.stream('zadd', 'commits:123', 1)
             seed.on 'end', ->
-                sut.createStorage cli, (err, storage) ->
+                sut.createStorage cfg, (err, storage) ->
                     filter = 
                         streamId: '123'
-                        minRevision: 0
+                        minRevision: 0       
                         maxRevision: Number.MAX_VALUE
                     reader= storage.createReader()
                     replies = []
@@ -57,6 +62,7 @@ describe 'redis-stream storage', ->
             seed.end()
     describe '#read-stream', ->
         it 'should read all events', (done) ->
+            @timeout(100)
             sut = redisStorage
             commit1 =
                 checkRevision: 0
@@ -71,7 +77,7 @@ describe 'redis-stream storage', ->
                 timestamp: new Date(2012,9,1,12,0,0)
             seed = cli.stream('zadd', 'commits:123', 1)
             seed.on 'end', ->
-                sut.createStorage cli, (err, storage) ->
+                sut.createStorage cfg, (err, storage) ->
                     filter = 
                         streamId: '123'
                         minRevision: 0
@@ -84,6 +90,7 @@ describe 'redis-stream storage', ->
 
     describe '#write-emit with old revision', ->
         it 'should return concurrency error', (done) ->
+            @timeout(100)
             sut = redisStorage
             commit1 =
                 checkRevision: 0
@@ -107,7 +114,7 @@ describe 'redis-stream storage', ->
                 timestamp: new Date(2012,9,1,13,0,0)
             stream = cli.stream 'zadd', 'commits:123', 1
             stream.on 'end', ->
-                sut.createStorage cli, (err, storage) ->
+                sut.createStorage cfg, (err, storage) ->
                     emitter = storage.createCommitter()
                     emitter.on 'commit', (data) ->
                         done new Error('fail')
@@ -119,7 +126,8 @@ describe 'redis-stream storage', ->
             stream.write JSON.stringify(commit1)
             stream.end()
     describe '#write-emit', ->
-        it 'should write commit ok', (done) ->
+        it 'should publish storage commit event', (done) ->
+            @timeout(100)
             sut = redisStorage
             commit =
                 checkRevision: 0
@@ -133,11 +141,31 @@ describe 'redis-stream storage', ->
                 ]
                 timestamp: new Date(2012,9,1,13,0,0)
 
-            sut.createStorage cli, (err, storage) ->
+            sut.createStorage cfg, (err, storage) =>
                 emitter =  storage.createCommitter()
-                emitter.on 'commit', (data)->
+                storage.on "#{cfg.id}.commit", -> done()
+                emitter.write commit
+
+        it 'should write commit ok', (done) ->
+            @timeout(100)
+            sut = redisStorage
+            commit =
+                checkRevision: 0
+                headers: []
+                streamId: '123'
+                streamRevision: 3
+                payload: [
+                    {a:1}
+                    {b:2}
+                    {c:3}
+                ]
+                timestamp: new Date(2012,9,1,13,0,0)
+
+            sut.createStorage cfg, (err, storage) =>
+                emitter =  storage.createCommitter()
+                emitter.on 'commit', (data)=>
                     actual = cli.stream 'zrange', 'commits:123', 0
-                    actual.on 'data', (reply) ->
+                    actual.on 'data', (reply) =>
                         data = JSON.parse(reply)
                         data.should.exist
                         data.payload.should.eql commit.payload
@@ -147,6 +175,7 @@ describe 'redis-stream storage', ->
                 emitter.write commit
     describe '#write-emit again', ->
         it 'should write commit ok', (done) ->
+            @timeout(100)
             sut = redisStorage
             commit1 =
                 checkRevision: 0
@@ -170,7 +199,7 @@ describe 'redis-stream storage', ->
                 timestamp: new Date(2012,9,1,13,0,0)
             stream = cli.stream 'zadd', 'commits:123', 1
             stream.on 'end', ->
-                sut.createStorage cli, (err, storage) ->
+                sut.createStorage cfg, (err, storage) ->
                     emitter = storage.createCommitter()
                     emitter.on 'error', (err) ->
                         done new Error 'fail'
@@ -191,6 +220,7 @@ describe 'redis-stream storage', ->
             stream.end()
     describe '#write-stream', ->
         it 'should write commit ok', (done) ->
+            @timeout(100)
             sut = redisStorage
             commit =
                 checkRevision: 0
@@ -204,7 +234,7 @@ describe 'redis-stream storage', ->
                 ]
                 timestamp: new Date(2012,9,1,13,0,0)
 
-            sut.createStorage cli, (err, storage) ->
+            sut.createStorage cfg, (err, storage) ->
                 storage.write commit, (err, result) ->
                     args = ['commits:123', 0, 4]
                     actual = cli.stream 'zrange', 'commits:123', 0
@@ -221,6 +251,7 @@ describe 'redis-stream storage', ->
                     actual.end()
     describe '#write-stream with old revision', ->
         it 'should return concurrency error', (done) ->
+            @timeout(100)
             sut = redisStorage
             commit1 =
                 checkRevision: 0
@@ -244,7 +275,7 @@ describe 'redis-stream storage', ->
                 timestamp: new Date(2012,9,1,13,0,0)
             stream = cli.stream 'zadd', 'commits:123', 1
             stream.on 'end', ->
-                sut.createStorage cli, (err, storage) ->
+                sut.createStorage cfg, (err, storage) ->
                     storage.write commit, (err, result) ->
                         err.should.exist
                         err.name.should.equal 'ConcurrencyError'
@@ -253,6 +284,7 @@ describe 'redis-stream storage', ->
             stream.end()
     describe '#write-stream again', ->
         it 'should write commit ok', (done) ->
+            @timeout(100)
             sut = redisStorage
             commit1 =
                 checkRevision: 0
@@ -276,7 +308,7 @@ describe 'redis-stream storage', ->
                 timestamp: new Date(2012,9,1,13,0,0)
             stream = cli.stream 'zadd', 'commits:123', 1
             stream.on 'end', ->
-                sut.createStorage cli, (err, storage) ->
+                sut.createStorage cfg, (err, storage) ->
                     storage.write commit, (err, result) ->
                         actual = cli.stream 'zrangebyscore', 'commits:123', 0
                         replies = []
