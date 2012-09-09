@@ -11,7 +11,7 @@
         ,"event-stream": "latest"
         ,"map-stream": "latest"
         ,"redis": "latest"
-        ,"redis-stream": "latest"
+        ,"redis-stream": "https://github.com/mnichols/redis-stream/tarball/reply"
     }
     ,"devDependencies" : {
         "mocha": "latest"

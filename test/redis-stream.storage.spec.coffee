@@ -18,6 +18,14 @@ describe 'redis-stream storage', ->
             done()
         flusher.write 'flushdb'
 
+    describe '#init', ->
+        it 'should emit ready event', (done) ->
+            sut = redisStorage
+            storage = sut.createStorage cfg
+            storage.on 'storage.ready', (storage) -> 
+                storage.id.should.equal 'myhairystorage'
+                done()
+
 
 
     describe '#reader-stream', ->

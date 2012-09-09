@@ -6,10 +6,10 @@ util = require 'util'
 defaultCfg = 
     id: 'redis-storage'
     client: null
+    getCommitsKey: (streamId) -> "commits:#{streamId}"
 
-getCommitsKey =  (streamId) -> "commits:#{streamId}"
 module.exports = 
-    createStorage2: (cfg = defaultCfg) ->
+    createStorage: (cfg = defaultCfg, cb) ->
         (cfg[k]=defaultCfg[k]) for k,v of defaultCfg when !cfg[k]
         client = cfg.client
         unless client?
@@ -30,6 +30,7 @@ module.exports =
             EventEmitter2.call @
             @id = cfg.id
             process.nextTick => @emit 'storage.ready', @
+
         util.inherits Storage, EventEmitter2
         Storage::createReader = ->
             reader = es.map (data, next) ->
@@ -54,10 +55,10 @@ module.exports =
             *        underlying payload of each commit
             ###
             reader.read = (filter, opts={flatten:true}) ->
-                id = getCommitsKey(filter.streamId)
+                id = cfg.getCommitsKey(filter.streamId)
                 finish = if opts.flatten then flatten else reader
                 streams = [
-                    client.stream('zrangebyscore', id, filter.minRevision)
+                    client.stream()
                     es.parse()
                     finish
                 ]
@@ -68,7 +69,12 @@ module.exports =
                 #proxy events from pipe to reader
                 pipe.emit = -> reader.emit.apply reader, arguments
                 #we have to pass an arg in to the underlying redis-stream
-                pipe.write filter.maxRevision
+                pipe.write [
+                    'zrangebyscore', 
+                    id, 
+                    filter.minRevision, 
+                    filter.maxRevision
+                ]
                 pipe.end()
             reader
         Storage::createCommitter = ->
@@ -77,39 +83,39 @@ module.exports =
                 #delegate our commit event
                 emitter.on 'commit', (data) ->
                     self.emit "#{cfg.id}.commit", data
-                id = getCommitsKey(commit.streamId)
-                writer = client.stream('zadd',id,commit.streamRevision)
-                maxRevision = client.stream('zrevrange',id,0,1)
+
+                id = cfg.getCommitsKey(commit.streamId)
+                maxRevision = client.stream()
+                writer = client.stream()
                 validate = es.map (data, next) =>
                     score = Number(data)
                     #first record is likely the actual object
                     #so just drop this data
                     return next() if isNaN score 
                     if score==commit.checkRevision
-                        return next null, null
+                        #build redis add command
+                        #here to pass into next stream
+                        writeCmd = [
+                            'zadd'
+                            id
+                            commit.streamRevision
+                            JSON.stringify(commit)
+                        ]
+                        return next null, writeCmd
                     next new ConcurrencyError()
-                _commit = (data, next) =>
+                done = es.map (data, next) =>
                     delete commit.checkRevision
                     emitter.emit 'commit', commit
                     emitter.emit 'data', commit #for piping
-                _write = =>
-                    pipe = es.pipeline(writer, es.map(_commit))
-                    pipe.write JSON.stringify commit
-                    pipe.end()
-                _error = (err) => 
-                    validate.removeListener 'end', _write
-                    validate.destroy()
-                    emitter.emit 'error', err
-                validate.on 'error',  _error
-                maxRevision.on 'error', _error
-                writer.on 'error', _error
-                validate.on 'end', _write
-                ck = es.pipeline(
-                    maxRevision,
-                    validate)
-                ck.write 'WITHSCORES'
-                ck.end()
-                    
+                cmd = es.pipeline(
+                        maxRevision,
+                        validate,
+                        writer,                    
+                        done
+                    )
+                cmd.on 'error',  (err) -> emitter.emit 'error', err
+                cmd.write ['zrevrange', id, 0, 1, 'WITHSCORES' ]
+                cmd.end()
 
         Storage::read = (filter, callback) ->
             reader = @createReader()
@@ -135,12 +141,9 @@ module.exports =
             committer.on 'error', (err) =>
                 callback.apply @, arguments
             return committer.write commit
-        new Storage cfg
+        storage = new Storage cfg        
+        cb null, storage if cb?
+        storage
 
-
-    createStorage: (cfg = defaultCfg, cb) ->
-        st = @createStorage2 cfg
-        st.on 'storage.ready', (storage) ->
-            cb null, storage
 
 
