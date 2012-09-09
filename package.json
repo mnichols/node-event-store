@@ -10,7 +10,6 @@
         ,"eventemitter2": "latest"
         ,"event-stream": "latest"
         ,"map-stream": "latest"
-        ,"redis": "latest"
         ,"redis-stream": "https://github.com/mnichols/redis-stream/tarball/reply"
     }
     ,"devDependencies" : {
