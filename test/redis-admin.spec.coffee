@@ -123,10 +123,10 @@ describe 'redis-admin', ->
             stream = @admin.createEventStream()
             vals = []
             stream.on 'data', (data) ->
-                console.log 'receiveddata', data
                 vals.push data
             stream.on 'end', ->
                 vals.length.should.equal 9
+                vals[0].should.eql @commit1.payload[0]
                 done()
             stream.write [start, end]
             stream.end()
