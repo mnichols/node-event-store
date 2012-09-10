@@ -19,7 +19,7 @@ describe 'redis-admin', ->
         flusher.write 'flushdb'
 
     describe '#stream history', ->
-        beforeEach ->
+        beforeEach (done) ->
             @commit1 =
                 headers: []
                 streamId: '123'
@@ -78,31 +78,57 @@ describe 'redis-admin', ->
                 @commit5
             ]
 
-
-        it 'should emit events between given datetime range', (done) ->
             sut = redisAdmin
-            redisAdmin.on 'ready', (err, admin) ->
-
-                start = new DateTime(2012, 9, 8, 7, 0, 0).getTime()
-                end = new DateTime(2012, 9, 9, 7, 0, 0).getTime()
-                
+            @admin = sut.createAdmin cfg
+            @admin.on 'ready', (err, admin) =>
                 writer = cli.stream('zadd')
-                writer.on 'end', ->
+                writer.on 'end', =>
                     auditor = cli.stream('zadd')
 
                     auditor.on 'end', ->
-                        range = admin.createRangeStream()
-                        vals = []
-                        range.on 'data', (data) ->
-                            vals.push data
-                        range.on 'end', ->
-                            vals.length.should.equal 3
-                            done()
-                        range.write start, end
+                        done()
                     for c in @commits
-                        auditor.write ["streamId2RevByTime", c.timestamp.getTime(), c.streamRevision]
-                        auditor.end()
+                        auditor.write ["streamId2RevByTime", 
+                            c.timestamp.getTime(), 
+                            JSON.stringify { 
+                                    streamId: c.streamId,
+                                    streamRevision: c.streamRevision
+                                }
+                            ]
+                    auditor.end()
 
                 for c in @commits
-                    writer.write ["commits:#{c.streamId}", c.streamRevision, JSON.stringify(c)]
-                    writer.end()
+                    writer.write ["commits:#{c.streamId}", 
+                        c.streamRevision, 
+                        JSON.stringify(c)]
+                writer.end()
+        
+
+        it 'should emit streamid mapping between given datetime range', (done) ->
+            start = new Date(2012, 9, 8, 7, 0, 0).getTime()
+            end = new Date(2012, 9, 9, 7, 0, 0).getTime()
+            stream = @admin.createRangeStream()
+            vals = []
+            stream.on 'data', (data) ->
+                vals.push data
+            stream.on 'end', ->
+                vals.length.should.equal 3
+                done()
+            stream.write [start, end]
+            stream.end()
+
+        it 'should create chronological event stream given datetime range', (done) ->
+            start = new Date(2012, 9, 8, 7, 0, 0).getTime()
+            end = new Date(2012, 9, 9, 7, 0, 0).getTime()
+            stream = @admin.createEventStream()
+            vals = []
+            stream.on 'data', (data) ->
+                vals.push data
+            stream.on 'end', ->
+                vals.length.should.equal 9
+                done()
+            stream.write [start, end]
+            stream.end()
+
+
+
