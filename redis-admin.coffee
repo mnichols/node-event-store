@@ -1,4 +1,5 @@
 es = require 'event-stream'
+{Stream} = require('stream')
 Redis = require 'redis-stream'
 {EventEmitter2} = require 'eventemitter2'
 util = require 'util'
@@ -20,7 +21,25 @@ module.exports =
 
         Admin::createEventStream = ->
             auditStream = @createRangeStream()
-            eventStream = cfg.client.stream()
+            commitStream = cfg.client.stream()
+            proxy = ->
+                stream = new Stream()
+                stream.writable = true
+                stream.readable = true
+                ended = false
+                paused = false
+                
+                stream.write = (data, next) ->
+                    data.forEach (e) ->
+                        stream.emit 'data', e
+                stream.end = -> stream.emit 'end'
+                stream.destroy = -> 
+                    stream.emit 'end'
+                    stream.emit 'close'
+                    ended = true
+                stream
+                
+
             xform = es.map (data, next) =>
                 args = [
                     'zrangebyscore'
@@ -30,23 +49,19 @@ module.exports =
                 ]
                 next null, args
             payload = es.map (data, next) =>
-                return next null, [] unless data.payload
+                return next null, null unless data.payload
                 next null, data.payload
 
-            pipe = es.pipeline(
+            inner = es.pipeline(
                 auditStream,
                 es.parse(),
                 xform,
-                eventStream,
+                commitStream,
+                es.parse(),
                 payload,
-                es.writeArray
+                proxy()
             )
-            pipe
-
-
-
-
-
+            inner
 
         new Admin cfg
             

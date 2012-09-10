@@ -123,6 +123,7 @@ describe 'redis-admin', ->
             stream = @admin.createEventStream()
             vals = []
             stream.on 'data', (data) ->
+                console.log 'receiveddata', data
                 vals.push data
             stream.on 'end', ->
                 vals.length.should.equal 9
