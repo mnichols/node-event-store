@@ -25,18 +25,32 @@ module.exports =
             proxy = ->
                 stream = new Stream()
                 stream.writable = true
-                stream.readable = true
+                stream.readable = false
                 ended = false
-                paused = false
+                destroyed = false
+                inputs = 0
+                outputs = 0
                 
-                stream.write = (data, next) ->
+                stream.write = (data) ->
+                    inputs++
                     data.forEach (e) ->
                         stream.emit 'data', e
-                stream.end = -> stream.emit 'end'
-                stream.destroy = -> 
-                    stream.emit 'end'
-                    stream.emit 'close'
+                    outputs++
+                    stream.emit 'drain'
+                    stream.end() if ended
+
+
+                stream.end = ->
                     ended = true
+                    stream.writable = false
+                    if inputs == outputs
+                        stream.emit 'end'
+                        stream.destroy()
+                stream.destroy = -> 
+                    destroyed = ended = true
+                    stream.writable = false
+                    process.nextTick ->
+                        stream.emit 'close'
                 stream
                 
 
