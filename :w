@@ -20,20 +20,18 @@ describe 'redis-admin', ->
 
     describe '#throughput', ->
         ts = new Date().getTime()
-        numberOfCommits = 10000
         beforeEach (done) ->
-            @timeout(10000)
             sut = redisAdmin
             @admin = sut.createAdmin cfg
             @admin.on 'ready', (err, admin) =>
                 streamId = 123
                 writer = cli.stream('zadd')
                 writer.on 'end', =>
-                    streamId = 123
+                    streamId 123
                     auditor = cli.stream('zadd')
                     auditor.on 'end', ->
                         done()
-                    for c in [0...numberOfCommits]
+                    for c in [0..100]
                         auditor.write ["streamId2RevByTime", 
                             ts,
                             JSON.stringify { 
@@ -43,32 +41,27 @@ describe 'redis-admin', ->
                             ]
                     auditor.end()
 
-                for c in [0...numberOfCommits]
+                for c in [0..100]
                     commit = 
                         streamId: (streamId++).toString()
                         streamRevision: 1
                         payload: [{a:1},{b:2},{c:3}]
 
-                    writer.write ["commits:#{commit.streamId.toString()}", 
+                    writer.write ["commits:#{(commit.streamId).toString()}", 
                         1,
                         JSON.stringify(commit)
                     ]
                 writer.end()
         it 'should not suck', (done) ->
-            @timeout(10000)
             stream = @admin.createEventStream()
             tick = 0
             stream.on 'data', (data) ->
                 tick++
-                if tick==(numberOfCommits*3)
-                    stream.end()
             stream.on 'end', =>
-                console.log '# events processed', tick
-                tick.should.equal (numberOfCommits*3)
+                console.log '#events', tick
                 done()
-
-            stream.write()
-            #stream.end()
+            stream.write [0, new Date(2999,12,31).getTime()]
+            stream.end()
 
 
     describe '#stream history', ->

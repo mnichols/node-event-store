@@ -63,10 +63,10 @@ module.exports =
                 ]
                 next null, args
             payload = es.map (data, next) =>
-                return next null, null unless data.payload
+                return next() unless data.payload
                 next null, data.payload
 
-            inner = es.pipeline(
+            pipe = es.pipeline(
                 auditStream,
                 es.parse(),
                 xform,
@@ -75,7 +75,14 @@ module.exports =
                 payload,
                 proxy()
             )
-            inner
+            originalWrite = pipe.write
+            pipe.write = ->
+                args = Array::slice.call @, arguments
+                if args.length < 1
+                    originalWrite [0, new Date(2999, 12,31).getTime()]
+                else
+                    originalWrite args[0]
+            pipe
 
         new Admin cfg
             
