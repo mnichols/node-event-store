@@ -20,9 +20,12 @@ module.exports =
             auditStream
 
         Admin::createEventStream = ->
+            countStream = cfg.client.stream 'zcount', 'streamId2RevByTime'
             auditStream = @createRangeStream()
             commitStream = cfg.client.stream()
-            proxy = ->
+            commitCount = 0
+            writeArgs = [0, new Date(2999, 12,31).getTime()]
+            eachEvent = ->
                 stream = new Stream()
                 stream.writable = true
                 stream.readable = false
@@ -35,15 +38,15 @@ module.exports =
                     inputs++
                     data.forEach (e) ->
                         stream.emit 'data', e
-                    outputs++
-                    stream.emit 'drain'
+                    if inputs==commitCount
+                        countStream.end()
                     stream.end() if ended
 
 
                 stream.end = ->
                     ended = true
                     stream.writable = false
-                    if inputs == outputs
+                    if inputs == commitCount
                         stream.emit 'end'
                         stream.destroy()
                 stream.destroy = -> 
@@ -67,21 +70,24 @@ module.exports =
                 next null, data.payload
 
             pipe = es.pipeline(
+                countStream,
+                es.map (data, next) ->
+                    commitCount = Number(data)
+                    console.log 'redis-admin',"streaming #{commitCount} commits"
+                    next null, writeArgs
                 auditStream,
                 es.parse(),
                 xform,
                 commitStream,
                 es.parse(),
                 payload,
-                proxy()
+                eachEvent()
             )
             originalWrite = pipe.write
             pipe.write = ->
-                args = Array::slice.call @, arguments
-                if args.length < 1
-                    originalWrite [0, new Date(2999, 12,31).getTime()]
-                else
-                    originalWrite args[0]
+                args = Array::slice.call arguments
+                writeArgs = args[0] if args.length > 0
+                originalWrite writeArgs
             pipe
 
         new Admin cfg

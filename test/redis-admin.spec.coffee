@@ -20,9 +20,9 @@ describe 'redis-admin', ->
 
     describe '#throughput', ->
         ts = new Date().getTime()
-        numberOfCommits = 10000
+        numberOfCommits = 100000
         beforeEach (done) ->
-            @timeout(10000)
+            @timeout(0)
             sut = redisAdmin
             @admin = sut.createAdmin cfg
             @admin.on 'ready', (err, admin) =>
@@ -55,20 +55,20 @@ describe 'redis-admin', ->
                     ]
                 writer.end()
         it 'should not suck', (done) ->
-            @timeout(10000)
+            @timeout(20000)
             stream = @admin.createEventStream()
             tick = 0
             stream.on 'data', (data) ->
+                data.a.should.equal 1 if data.a
+                data.b.should.equal 2 if data.b
+                data.c.should.equal 3 if data.c
                 tick++
-                if tick==(numberOfCommits*3)
-                    stream.end()
             stream.on 'end', =>
                 console.log '# events processed', tick
                 tick.should.equal (numberOfCommits*3)
                 done()
 
             stream.write()
-            #stream.end()
 
 
     describe '#stream history', ->
@@ -190,7 +190,6 @@ describe 'redis-admin', ->
                     vals[8].should.eql @commit4.payload[2]
                     done()
                 stream.write [start, end]
-                stream.end()
 
 
 
