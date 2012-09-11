@@ -20,11 +20,18 @@ module.exports =
             auditStream
 
         Admin::createEventStream = ->
+            commitCount = 0
+            #default args...everything
+            writeArgs = [0, new Date(2999, 12,31).getTime()]
             countStream = cfg.client.stream 'zcount', 'streamId2RevByTime'
+            countercept = es.map (data, next) ->
+                    commitCount = Number(data)
+                    console.log 'redis-admin',"streaming #{commitCount} commits"
+                    next null, writeArgs
             auditStream = @createRangeStream()
             commitStream = cfg.client.stream()
-            commitCount = 0
-            writeArgs = [0, new Date(2999, 12,31).getTime()]
+            #@ this emits each event in the data array
+            #ending the stream if the last commit packet has been received
             eachEvent = ->
                 stream = new Stream()
                 stream.writable = true
@@ -38,7 +45,7 @@ module.exports =
                     inputs++
                     data.forEach (e) ->
                         stream.emit 'data', e
-                    if inputs==commitCount
+                    if inputs>=commitCount
                         countStream.end()
                     stream.end() if ended
 
@@ -71,10 +78,7 @@ module.exports =
 
             pipe = es.pipeline(
                 countStream,
-                es.map (data, next) ->
-                    commitCount = Number(data)
-                    console.log 'redis-admin',"streaming #{commitCount} commits"
-                    next null, writeArgs
+                countercept,
                 auditStream,
                 es.parse(),
                 xform,

@@ -55,6 +55,7 @@ describe 'redis-admin', ->
                     ]
                 writer.end()
         it 'should not suck', (done) ->
+            #we are pushing thru 300,000 events in about 20 seconds
             @timeout(20000)
             stream = @admin.createEventStream()
             tick = 0
