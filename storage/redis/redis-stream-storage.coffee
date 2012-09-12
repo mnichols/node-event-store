@@ -65,10 +65,6 @@ module.exports =
             eachEvent.on 'tick', (inputs) =>
                 reader.end() if inputs>=commitCount
 
-
-            eacher = es.map (data, next) ->
-                data.forEach (e) -> next null, e
-                next()
             reader = es.pipeline(
                 countStream,
                 countercept,
@@ -79,6 +75,7 @@ module.exports =
             )
         
             reader.read = -> reader.write args
+
             return reader
         Storage::createCommitter = ->
             buildValidator = (commit) =>

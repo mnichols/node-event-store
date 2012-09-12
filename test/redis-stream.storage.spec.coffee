@@ -81,7 +81,6 @@ describe 'redis-stream storage', ->
         sut = null
         beforeEach (done) ->
             @timeout(100)
-            sut = redisStorage
             @commit1 =
                 checkRevision: 0
                 headers: []
@@ -99,6 +98,7 @@ describe 'redis-stream storage', ->
             seed.write JSON.stringify(@commit1)
             seed.end()
         it 'should read all events', (done) ->
+            sut = redisStorage
             sut.createStorage cfg, (err, storage) ->
                 filter = 
                     streamId: '123'
@@ -111,7 +111,6 @@ describe 'redis-stream storage', ->
     describe '#write-emit with old revision', ->
         beforeEach (done) ->
             @timeout(1000)
-            sut = redisStorage
             @commit1 =
                 checkRevision: 0
                 headers: []
@@ -138,6 +137,7 @@ describe 'redis-stream storage', ->
             stream.end()
         it 'should return concurrency error', (done) ->
             @timeout(100)
+            sut = redisStorage
             sut = redisStorage
             sut.createStorage cfg, (err, storage) =>
                 emitter = storage.createCommitter()

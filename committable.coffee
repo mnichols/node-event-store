@@ -1,5 +1,6 @@
 es = require 'event-stream'
 createCommit = (cfg) ->
+    console.log 'commitcfg', cfg
     now = new Date()
     utc = Date.UTC now.getFullYear(), 
         now.getMonth(), 
@@ -21,22 +22,27 @@ module.exports = (cfg, storage) ->
         throw new Error 'streamId is required'
     streamId = cfg.streamId
     uncommitted = []
-    commitStream = es.map (data, callback) ->
-        storage.write data, (err, result) ->
-            return callback err if err
-            callback null, result
+    commitStream = storage.createCommitter()
 
     addEvents = (events = []) ->
         uncommitted = uncommitted.concat events
-    
-    commitStream.commit = (events = []) ->
+
+    streamableCommit = es.map (events = [], next) ->
+        console.log 'streamable', events
         addEvents events if events
         cfg =
             streamRevision: cfg.streamRevision
             streamId: streamId
             events: uncommitted
-        commitStream.write createCommit(cfg)
-        commitStream.end()
-    commitStream
+        next null, createCommit(cfg)
+
+
+    pipe = es.pipeline(
+        streamableCommit,
+        commitStream
+    )
+
+    pipe
+
 
 

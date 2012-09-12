@@ -1,5 +1,5 @@
-eventStream = require '../event-stream'
-describe 'es', ->
+store = require '../event-store'
+describe 'event-store', ->
     describe.skip '#openStream', ->
         it 'should read events from storage', (done) ->
             events = [
@@ -10,7 +10,7 @@ describe 'es', ->
                     cb null, 
                         streamRevision: 2
                         committedEvents: [{a:1}]
-            sut = eventStream inmem()
+            sut = store inmem()
             filter = 
                 minRevision: 0
                 maxRevision: Number.MAX_VALUE
@@ -24,23 +24,24 @@ describe 'es', ->
             stream.read()
 
     
-    describe '#through', ->
+    describe.skip '#through', ->
         it 'should commit events', ->
             events = [
                 {c:1}
             ]
             inmem = ->
                 events = {}
-                read: (q, cb) ->
-                    cb null, 
-                        streamRevision: 2
-                        committedEvents: [{a:1}]
+                createReader: (filter) ->
+                    read: (q, cb) ->
+                        cb null, 
+                            streamRevision: 2
+                            committedEvents: [{a:1}]
                 write: (commit, cb) ->
                     events[commit.streamId] = (events[commit.streamId] ? []).concat [commit]
                     cb null, commit
                 events: events
             storage = inmem()
-            sut = eventStream storage
+            sut = store storage
             filter = 
                 streamId: '123'
                 minRevision: 0
