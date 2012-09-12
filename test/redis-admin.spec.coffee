@@ -2,7 +2,7 @@ describe 'redis-admin', ->
     cli = null
     cfg = null
     Redis = require 'redis-stream'
-    redisAdmin = require '../redis-admin'
+    redisAdmin = require '../storage/redis/redis-admin'
 
     beforeEach (done) ->
         (cli = new Redis 6379, 'localhost', 11)

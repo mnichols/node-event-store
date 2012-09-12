@@ -51,8 +51,7 @@ module.exports =
             *    @param {Number} [minRevision=0] The minimum revision to start stream at
             *    @param {Number} [maxRevision=Number.MAX_VALUE] The max revision
             *@param {Object} [opts]
-            *    @param {Boolean} [flatten=true] Emit events one at a time from 
-            *        underlying payload of each commit
+            *    @param {Boolean} [flatten=true] Emit events with commit descriptors
             ###
             reader.read = (filter, opts={flatten:true}) ->
                 id = cfg.getCommitsKey(filter.streamId)

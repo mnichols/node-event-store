@@ -1,9 +1,9 @@
+redisStorage = require '../storage/redis/redis-stream-storage'
+cli = null
+cfg = null
+Redis = require 'redis-stream'
+es = require 'event-stream'
 describe 'redis-stream storage', ->
-    cli = null
-    cfg = null
-    Redis = require 'redis-stream'
-    es = require 'event-stream'
-    redisStorage = require '../redis-stream-storage'
     beforeEach (done) ->
         (cli = new Redis 6379, 'localhost', 11)
         cfg =
@@ -28,11 +28,13 @@ describe 'redis-stream storage', ->
 
 
 
-    describe '#reader-stream', ->
-        it 'should read all events', (done) ->
+    describe '#createReader stream', ->
+        sut = null
+        
+        beforeEach (done) ->
             @timeout(100)
             sut = redisStorage
-            commit1 =
+            @commit1 =
                 headers: []
                 streamId: '123'
                 streamRevision: 1
@@ -44,35 +46,43 @@ describe 'redis-stream storage', ->
                 timestamp: new Date(2012,9,1,12,0,0)
             seed = cli.stream('zadd', 'commits:123', 1)
             seed.on 'end', ->
-                sut.createStorage cfg, (err, storage) ->
-                    filter = 
-                        streamId: '123'
-                        minRevision: 0       
-                        maxRevision: Number.MAX_VALUE
-                    reader= storage.createReader()
-                    replies = []
-                    reader.on 'data', (data) ->
-                        Array::push.apply replies, data                        
-                    reader.on 'end', ->
-                        replies.length.should.equal commit1.payload.length
-                        replies[0].streamId.should.equal '123'
-                        replies[0].streamRevision.should.equal 1
-                        replies[0].a.should.equal 1
-                        replies[1].streamId.should.equal '123'
-                        replies[1].streamRevision.should.equal 1
-                        replies[1].b.should.equal 2
-                        replies[2].streamId.should.equal '123'
-                        replies[2].streamRevision.should.equal 1
-                        replies[2].c.should.equal 3
-                        done()
-                    reader.read filter
-            seed.write JSON.stringify(commit1)
+                done()
+            seed.write JSON.stringify(@commit1)
             seed.end()
-    describe '#read-stream', ->
         it 'should read all events', (done) ->
             @timeout(100)
             sut = redisStorage
-            commit1 =
+            sut.createStorage cfg, (err, storage) =>
+                filter = 
+                    streamId: '123'
+                    minRevision: 0       
+                    maxRevision: Number.MAX_VALUE
+                reader= storage.createReader()
+                replies = []
+                tick=0
+                reader.on 'data', (data) ->
+                    tick++
+                    Array::push.apply replies, data                        
+                reader.on 'end', =>
+                    tick.should.equal 3
+                    replies.length.should.equal @commit1.payload.length
+                    replies[0].streamId.should.equal '123'
+                    replies[0].streamRevision.should.equal 1
+                    replies[0].a.should.equal 1
+                    replies[1].streamId.should.equal '123'
+                    replies[1].streamRevision.should.equal 1
+                    replies[1].b.should.equal 2
+                    replies[2].streamId.should.equal '123'
+                    replies[2].streamRevision.should.equal 1
+                    replies[2].c.should.equal 3
+                    done()
+                reader.read filter
+    describe '#read', ->
+        sut = null
+        beforeEach (done) ->
+            @timeout(100)
+            sut = redisStorage
+            @commit1 =
                 checkRevision: 0
                 headers: []
                 streamId: '123'
@@ -85,16 +95,18 @@ describe 'redis-stream storage', ->
                 timestamp: new Date(2012,9,1,12,0,0)
             seed = cli.stream('zadd', 'commits:123', 1)
             seed.on 'end', ->
-                sut.createStorage cfg, (err, storage) ->
-                    filter = 
-                        streamId: '123'
-                        minRevision: 0
-                        maxRevision: Number.MAX_VALUE
-                    storage.read filter, (err, result) ->
-                        result.length.should.equal 3
-                        done()
-            seed.write JSON.stringify(commit1)
+                done()
+            seed.write JSON.stringify(@commit1)
             seed.end()
+        it 'should read all events', (done) ->
+            sut.createStorage cfg, (err, storage) ->
+                filter = 
+                    streamId: '123'
+                    minRevision: 0
+                    maxRevision: Number.MAX_VALUE
+                storage.read filter, (err, result) ->
+                    result.length.should.equal 3
+                    done()
 
     describe '#write-emit with old revision', ->
         it 'should return concurrency error', (done) ->
@@ -248,7 +260,7 @@ describe 'redis-stream storage', ->
                     actual = cli.stream 'zrange', 'commits:123', 0
                     data = null
                     actual.on 'error', (err) ->
-                        console.log 'err', err
+                        console.error 'err', err
                         done(new Error 'fail')
                     actual.on 'end', ->
                         data.should.exist

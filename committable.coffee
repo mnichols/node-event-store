@@ -16,8 +16,10 @@ createCommit = (cfg) ->
     payload: cfg.events
 
     
-module.exports = (stream, storage) ->
-    streamId = stream.streamId
+module.exports = (cfg, storage) ->
+    unless cfg.streamId
+        throw new Error 'streamId is required'
+    streamId = cfg.streamId
     uncommitted = []
     commitStream = es.map (data, callback) ->
         storage.write data, (err, result) ->
@@ -30,7 +32,7 @@ module.exports = (stream, storage) ->
     commitStream.commit = (events = []) ->
         addEvents events if events
         cfg =
-            streamRevision: stream.streamRevision
+            streamRevision: cfg.streamRevision
             streamId: streamId
             events: uncommitted
         commitStream.write createCommit(cfg)

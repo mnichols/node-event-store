@@ -30,39 +30,10 @@ module.exports =
                     next null, writeArgs
             auditStream = @createRangeStream()
             commitStream = cfg.client.stream()
-            #@ this emits each event in the data array
-            #ending the stream if the last commit packet has been received
-            eachEvent = ->
-                stream = new Stream()
-                stream.writable = true
-                stream.readable = false
-                ended = false
-                destroyed = false
-                inputs = 0
-                outputs = 0
-                
-                stream.write = (data) ->
-                    inputs++
-                    data.forEach (e) ->
-                        stream.emit 'data', e
-                    if inputs>=commitCount
-                        countStream.end()
-                    stream.end() if ended
-
-
-                stream.end = ->
-                    ended = true
-                    stream.writable = false
-                    if inputs == commitCount
-                        stream.emit 'end'
-                        stream.destroy()
-                stream.destroy = -> 
-                    destroyed = ended = true
-                    stream.writable = false
-                    process.nextTick ->
-                        stream.emit 'close'
-                stream
-                
+            eachEvent = (require './each-event-stream')()
+            eachEvent.on 'tick', (inputs) ->
+                if inputs >= commitCount
+                    countStream.end()
 
             xform = es.map (data, next) =>
                 args = [
@@ -85,7 +56,7 @@ module.exports =
                 commitStream,
                 es.parse(),
                 payload,
-                eachEvent()
+                eachEvent
             )
             originalWrite = pipe.write
             pipe.write = ->

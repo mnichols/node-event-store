@@ -1,9 +1,9 @@
-es = require 'event-stream'
+mapStream = require 'map-stream'
 committable = require './committable'
 module.exports = (storage) ->
     open: (filter) ->
         stream =
-            es.map (filter, callback) ->
+            mapStream (filter, callback) ->
                 unless filter.streamId
                     return callback new Error 'streamId is required'
 
@@ -16,6 +16,5 @@ module.exports = (storage) ->
         (stream[k]=filter[k]) for k,val of filter
         stream.read = -> 
             stream.write filter
-            stream.end()
         stream
 
