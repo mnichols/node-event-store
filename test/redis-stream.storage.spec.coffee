@@ -57,12 +57,12 @@ describe 'redis-stream storage', ->
                     streamId: '123'
                     minRevision: 0       
                     maxRevision: Number.MAX_VALUE
-                reader= storage.createReader()
+                reader= storage.createReader filter
                 replies = []
                 tick=0
                 reader.on 'data', (data) ->
                     tick++
-                    Array::push.apply replies, data                        
+                    replies.push data
                 reader.on 'end', =>
                     tick.should.equal 3
                     replies.length.should.equal @commit1.payload.length
@@ -76,7 +76,7 @@ describe 'redis-stream storage', ->
                     replies[2].streamRevision.should.equal 1
                     replies[2].c.should.equal 3
                     done()
-                reader.read filter
+                reader.read()
     describe '#read', ->
         sut = null
         beforeEach (done) ->
@@ -109,10 +109,10 @@ describe 'redis-stream storage', ->
                     done()
 
     describe '#write-emit with old revision', ->
-        it 'should return concurrency error', (done) ->
-            @timeout(100)
+        beforeEach (done) ->
+            @timeout(1000)
             sut = redisStorage
-            commit1 =
+            @commit1 =
                 checkRevision: 0
                 headers: []
                 streamId: '123'
@@ -121,8 +121,8 @@ describe 'redis-stream storage', ->
                     {a:1}
                 ]
                 timestamp: new Date(2012,9,1,12,0,0)
-            commit =
-                checkRevision: commit1.checkRevision
+            @commit =
+                checkRevision: @commit1.checkRevision
                 headers: []
                 streamId: '123'
                 streamRevision: 4
@@ -133,18 +133,21 @@ describe 'redis-stream storage', ->
                 ]
                 timestamp: new Date(2012,9,1,13,0,0)
             stream = cli.stream 'zadd', 'commits:123', 1
-            stream.on 'end', ->
-                sut.createStorage cfg, (err, storage) ->
-                    emitter = storage.createCommitter()
-                    emitter.on 'commit', (data) ->
-                        done new Error('fail')
-                    emitter.on 'error', (err) ->
-                        err.should.exist
-                        err.name.should.equal 'ConcurrencyError'
-                        done()
-                    emitter.write commit
-            stream.write JSON.stringify(commit1)
+            stream.on 'end', -> done()
+            stream.write JSON.stringify(@commit1)
             stream.end()
+        it 'should return concurrency error', (done) ->
+            @timeout(100)
+            sut = redisStorage
+            sut.createStorage cfg, (err, storage) =>
+                emitter = storage.createCommitter()
+                emitter.on 'commit', (data) =>
+                    done new Error('fail')
+                emitter.on 'error', (err) =>
+                    err.should.exist
+                    err.name.should.equal 'ConcurrencyError'
+                    done()
+                emitter.write @commit
     describe '#write-emit', ->
         it 'should publish storage commit event', (done) ->
             @timeout(100)

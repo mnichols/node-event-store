@@ -1,10 +1,10 @@
 {Stream} = require 'stream'
 ###@ this emits each event in the data array,
 ###
-module.exports = ->
+module.exports = (target) ->
     stream = new Stream()
     stream.writable = true
-    stream.readable = false
+    stream.readable = true
     ended = false
     destroyed = false
     inputs = 0

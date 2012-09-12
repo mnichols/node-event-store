@@ -23,8 +23,12 @@ module.exports =
         isNumber = (obj) ->
             toString.call(obj)=='[object Number]'
 
+        isArray = (obj) ->
+            Object::toString.call obj == '[object Array]'
         slice = Array::slice
-        concat = (target=[], data=[]) -> Array::push.apply target, data
+        concat = (target=[], data=[]) -> 
+            data = [data] unless isArray data
+            Array::push.apply target, data
 
         Storage = (cfg) ->
             EventEmitter2.call @
@@ -32,104 +36,112 @@ module.exports =
             process.nextTick => @emit 'storage.ready', @
 
         util.inherits Storage, EventEmitter2
-        Storage::createReader = ->
-            reader = es.map (data, next) ->
-                next null, data
+        Storage::createReader = (filter, opts={flatten:true}) ->
+            id = cfg.getCommitsKey(filter.streamId)
+            args = [id, filter.minRevision, filter.maxRevision]
+            reader = null
+            commitCount = 0
+            countStream = cfg.client.stream 'zcount'
+            rangeStream = cfg.client.stream 'zrangebyscore'
+            countercept =
+                es.map (data, next) ->
+                    commitCount = Number(data)
+                    console.log 'redis-storage',"streaming #{commitCount} commits"
+                    next null, args
             
-            flatten = es.map (data, next) ->
-                return next() unless data?.payload
+            flatten = (data) ->
                 events = data.payload.map (e) ->
                     (e[k]=data[k]) for k,v of data when k!='payload'
                     e
-                next null, events
+                return events
 
-            ###
-            *Begins stream events
-            *@method read
-            *@param {Object} filter The definition for the stream
-            *    @param {String} streamId The id for the stream
-            *    @param {Number} [minRevision=0] The minimum revision to start stream at
-            *    @param {Number} [maxRevision=Number.MAX_VALUE] The max revision
-            *@param {Object} [opts]
-            *    @param {Boolean} [flatten=true] Emit events with commit descriptors
-            ###
-            reader.read = (filter, opts={flatten:true}) ->
-                id = cfg.getCommitsKey(filter.streamId)
-                finish = if opts.flatten then flatten else reader
-                streams = [
-                    client.stream()
-                    es.parse()
-                    finish
-                ]
-                pipe = es.pipeline.apply @, streams
-                #proxy stream commands to our pipe
-                reader.pause = pipe.pause
-                reader.resume = pipe.resume
-                #proxy events from pipe to reader
-                pipe.emit = -> reader.emit.apply reader, arguments
-                #we have to pass an arg in to the underlying redis-stream
-                pipe.write [
-                    'zrangebyscore', 
-                    id, 
-                    filter.minRevision, 
-                    filter.maxRevision
-                ]
-                pipe.end()
-            reader
+            payload =
+                es.map (data, next) =>
+                    return next() unless data.payload
+                    events = if opts.flatten then flatten(data) else data.payload
+                    next null, events
+            eachEvent = (require './each-event-stream')()
+            
+            eachEvent.on 'tick', (inputs) =>
+                reader.end() if inputs>=commitCount
+
+
+            eacher = es.map (data, next) ->
+                data.forEach (e) -> next null, e
+                next()
+            reader = es.pipeline(
+                countStream,
+                countercept,
+                rangeStream,
+                es.parse(),
+                payload,
+                eachEvent
+            )
+        
+            reader.read = -> reader.write args
+            return reader
         Storage::createCommitter = ->
-            self = @
-            emitter = es.map (commit, next) =>
-                #delegate our commit event
-                emitter.on 'commit', (data) ->
-                    self.emit "#{cfg.id}.commit", data
-
-                id = cfg.getCommitsKey(commit.streamId)
-                maxRevision = client.stream()
-                writer = client.stream()
-                validate = es.map (data, next) =>
+            buildValidator = (commit) =>
+                (data, next) ->                
                     score = Number(data)
                     #first record is likely the actual object
                     #so just drop this data
                     return next() if isNaN score 
                     if score==commit.checkRevision
-                        #build redis add command
-                        #here to pass into next stream
-                        writeCmd = [
+                        args = [
                             'zadd'
-                            id
+                            cfg.getCommitsKey(commit.streamId)
                             commit.streamRevision
                             JSON.stringify(commit)
                         ]
-                        return next null, writeCmd
+                        return next null, args
                     next new ConcurrencyError()
-                done = es.map (data, next) =>
+            buildDone = (commit) =>
+                (data, next) ->
                     delete commit.checkRevision
-                    emitter.emit 'commit', commit
-                    emitter.emit 'data', commit #for piping
-                cmd = es.pipeline(
-                        maxRevision,
-                        validate,
-                        writer,                    
-                        done
-                    )
-                cmd.on 'error',  (err) -> emitter.emit 'error', err
-                cmd.write ['zrevrange', id, 0, 1, 'WITHSCORES' ]
-                cmd.end()
+                    next null, commit
+
+            validator = -> throw new Error('"validator" not implemented')
+            done = -> throw new Error('"done" not implemented')
+            maxRevision = client.stream()
+            validate = es.map (data, next) =>
+                validator data, next
+            writer = client.stream()
+            finisher = es.map (data, next) =>
+                done data, next
+                pipe.end()
+            pipe = es.pipeline(
+                maxRevision,
+                validate,
+                writer,
+                finisher
+                )
+
+            pipe.on 'data', (data) => pipe.emit 'commit', data
+            pipe.on 'commit', (data) => @emit "#{cfg.id}.commit", data
+
+            originalWrite = pipe.write
+            pipe.write = (commit) =>
+                unless commit
+                    throw new Error 'commit object is required'
+                id = cfg.getCommitsKey commit.streamId
+                validator = buildValidator commit
+                done = buildDone commit
+                originalWrite ['zrevrange', id, 0, 1, 'WITHSCORES' ]
+
+            return pipe
 
         Storage::read = (filter, callback) ->
-            reader = @createReader()
+            reader = @createReader filter
             events = []
             reader.on 'error', => 
                 events = []
                 callback.apply  @, arguments
             reader.on 'data', (data) =>
-                concat events, data
+                events.push data
             reader.on 'end', =>
-                args = slice.call arguments
-                args.unshift events
-                args.unshift null
-                callback.apply @, args
-            reader.read filter
+                callback null, events
+            reader.read()
 
         Storage::write = (commit, callback) ->
             committer = @createCommitter()
