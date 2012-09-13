@@ -119,7 +119,6 @@ describe 'redis-integration', ->
                             cli.stream('zrange', auditor.auditKey, 0),
                             eventStream.parse(),
                             eventStream.map (data, next) ->
-                                console.log 'from redis', data
                                 next null, data
                             eventStream.map (data, next) =>
                                 data.streamId.should.equal expect.streamId

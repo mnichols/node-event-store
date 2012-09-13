@@ -3,6 +3,15 @@ store = require '../event-store'
 inMem = require '../storage/in-memory'
 describe 'event-store', ->
     storage = null
+    Aggregate = ->
+        events = []
+        events: events
+        in: es.map (data, next) ->
+            events.push data
+            next()
+        out: es.map (data, next) ->
+            next null, data
+        
     beforeEach ->
         storage = inMem.createStorage()
 
@@ -23,13 +32,13 @@ describe 'event-store', ->
                 streamId: '123'
             received = []
             stream = sut.open filter
+            agg = new Aggregate()
             stream.on 'end', ->
-                received.length.should.equal 1
-                received[0].should.eql
+                agg.events.length.should.equal 1
+                agg.events[0].should.eql
                     a: 1
                 done()
-            stream.on 'data', (event) ->
-                received.push event
+            stream.pipe agg.in
             stream.read()
 
     
@@ -50,13 +59,6 @@ describe 'event-store', ->
                 streamId: '123'
             received = []
             stream = sut.open filter
-            Aggregate = ->
-                events = []
-                in: es.map (data, next) ->
-                    events.push data
-                    next()
-                out: es.map (data, next) ->
-                    next null, data
 
             agg = Aggregate()
             stream.pipe(agg.in)
