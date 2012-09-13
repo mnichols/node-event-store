@@ -7,23 +7,39 @@ defaultCfg =
     id: 'redis-storage'
     client: null
     getCommitsKey: (streamId) -> "commits:#{streamId}"
+    auditKey: 'streamIdRevByTime'
 
 module.exports = 
     createAdmin: (cfg) ->
         (cfg[k]=defaultCfg[k]) for k,v of defaultCfg when !cfg[k]?
-        Admin =  ->
+        Admin =  (cfg) ->
             EventEmitter2.call @
+            (@[k]=cfg[k]) for k,v of cfg
             process.nextTick => @emit 'ready', null, @
         util.inherits Admin, EventEmitter2
+        Admin::audit = (commit) ->
+            process.nextTick =>
+                map = 
+                    streamId: commit.streamId
+                    streamRevision: commit.streamRevision
+                auditor = cfg.client.stream()
+                auditor.write [
+                    'zadd'
+                    @auditKey
+                    commit.timestamp.getTime()
+                    JSON.stringify map
+                ]
+                auditor.end()
+
         Admin::createRangeStream = ->
-            auditStream = cfg.client.stream 'zrangebyscore', 'streamId2RevByTime'
+            auditStream = cfg.client.stream 'zrangebyscore', @auditKey
             auditStream
 
         Admin::createEventStream = ->
             commitCount = 0
             #default args...everything
             writeArgs = [0, new Date(2999, 12,31).getTime()]
-            countStream = cfg.client.stream 'zcount', 'streamId2RevByTime'
+            countStream = cfg.client.stream 'zcount', @auditKey
             countercept = es.map (data, next) ->
                     commitCount = Number(data)
                     console.log 'redis-admin',"streaming #{commitCount} commits"

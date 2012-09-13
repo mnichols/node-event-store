@@ -82,6 +82,7 @@ describe 'redis-admin', ->
 
             sut = redisAdmin
             @admin = sut.createAdmin cfg
+
             @admin.on 'ready', (err, admin) =>
                 writer = cli.stream('zadd')
                 writer.on 'end', =>
@@ -90,7 +91,7 @@ describe 'redis-admin', ->
                     auditor.on 'end', ->
                         done()
                     for c in @commits
-                        auditor.write ["streamId2RevByTime", 
+                        auditor.write ["streamIdRevByTime", 
                             c.timestamp.getTime(), 
                             JSON.stringify { 
                                     streamId: c.streamId,
