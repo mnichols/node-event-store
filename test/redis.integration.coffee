@@ -110,9 +110,25 @@ describe 'redis-integration', ->
                     next null, data
                 stream.on 'data', (data) ->
                     events.push data
-                stream.on 'end', ->
-                    aggregate.pipe(stream.commit).pipe eventStream.map (data, next) ->
-                        done()
+                stream.on 'end', =>
+                    aggregate.pipe(stream.commit).pipe eventStream.map (data, next) =>
+                        expect = 
+                            streamId : '123'
+                            streamRevision:events.length + @commit1.streamRevision
+                        checker = eventStream.pipeline(
+                            cli.stream('zrange', auditor.auditKey, 0),
+                            eventStream.parse(),
+                            eventStream.map (data, next) ->
+                                console.log 'from redis', data
+                                next null, data
+                            eventStream.map (data, next) =>
+                                data.streamId.should.equal expect.streamId
+                                data.streamRevision.should.equal(expect.streamRevision)
+                                next null, null
+                                checker.end()
+                            )
+                        checker.on 'end', -> done()
+                        checker.write '1'
                     aggregate.write events
 
                 stream.read()

@@ -21,8 +21,6 @@ module.exports =
 
         ConcurrencyError:: = new Error()
         ConcurrencyError::constructor = ConcurrencyError
-        isNumber = (obj) ->
-            toString.call(obj)=='[object Number]'
 
         isArray = (obj) ->
             Object::toString.call obj == '[object Array]'

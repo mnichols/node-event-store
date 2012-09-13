@@ -1,61 +1,71 @@
+es = require 'event-stream'
 store = require '../event-store'
+inMem = require '../storage/in-memory'
 describe 'event-store', ->
-    describe.skip '#openStream', ->
+    storage = null
+    beforeEach ->
+        storage = inMem.createStorage()
+
+    
+    describe '#open to read', ->
         it 'should read events from storage', (done) ->
-            events = [
-                {b:1}
-            ]
-            inmem = ->
-                read: (q, cb) ->
-                    cb null, 
-                        streamRevision: 2
-                        committedEvents: [{a:1}]
-            sut = store inmem()
+            storage.mount 
+                'commits:123': [
+                    streamRevision: 1
+                    payload: [
+                        {a:1}
+                    ]
+                ]
+            sut = store storage
             filter = 
                 minRevision: 0
                 maxRevision: Number.MAX_VALUE
                 streamId: '123'
+            received = []
             stream = sut.open filter
-            stream.on 'end', done
-            stream.on 'data', (read) ->
-                read.committedEvents.length.should.equal 1
-                read.committedEvents[0].should.eql
-                    a:1
+            stream.on 'end', ->
+                received.length.should.equal 1
+                received[0].should.eql
+                    a: 1
+                done()
+            stream.on 'data', (event) ->
+                received.push event
             stream.read()
 
     
-    describe.skip '#through', ->
-        it 'should commit events', ->
-            events = [
-                {c:1}
-            ]
-            inmem = ->
-                events = {}
-                createReader: (filter) ->
-                    read: (q, cb) ->
-                        cb null, 
-                            streamRevision: 2
-                            committedEvents: [{a:1}]
-                write: (commit, cb) ->
-                    events[commit.streamId] = (events[commit.streamId] ? []).concat [commit]
-                    cb null, commit
-                events: events
-            storage = inmem()
+    describe '#commit', ->
+        beforeEach ->
+            storage.mount 
+                'commits:123': [
+                    streamRevision: 1
+                    payload: [
+                        {a:1}
+                    ]
+                ]
+        it 'should commit events', (done) ->
             sut = store storage
             filter = 
-                streamId: '123'
                 minRevision: 0
                 maxRevision: Number.MAX_VALUE
+                streamId: '123'
+            received = []
             stream = sut.open filter
-            stream.on 'data', (e) ->
-                e.committedEvents.should.eql [{a:1}]
-                
-                writeable = stream.makeCommittable()
-                writeable.commit events
-                storage.events['123'][0].payload.should.eq; [
-                    {c:1}
-                ]
+            Aggregate = ->
+                events = []
+                in: es.map (data, next) ->
+                    events.push data
+                    next()
+                out: es.map (data, next) ->
+                    next null, data
+
+            agg = Aggregate()
+            stream.pipe(agg.in)
+            stream.on 'end', =>
+                ck = es.map (commit, next) ->
+                    commit.should.exist
+                    commit.streamRevision.should.equal 2
+                    done()
+                agg.out.pipe(stream.commit).pipe ck
+                agg.out.write {b:1}
             stream.read()
-
-
 
