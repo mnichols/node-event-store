@@ -1,13 +1,13 @@
 mapStream = require 'map-stream'
 committable = require './committable'
-module.exports = (storage) ->
-    storage.on "#{storage.id}.commit", (commit) ->
-        process.nextTick ->
-            console.log 'queuing commit', commit
+module.exports = (storage, auditor) ->
     open: (filter) ->
         stream = storage.createReader filter
         (stream[k]=filter[k]) for k,val of filter
         stream.on 'end', ->
-            stream.commit = committable(stream, storage)
+            commit = committable stream, storage
+            if auditor
+                commit = commit.pipe(auditor.audit)
+            stream.commit = commit
         return stream
 

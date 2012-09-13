@@ -83,12 +83,14 @@ module.exports =
             return reader
         Storage::createCommitter = ->
             buildValidator = (commit) =>
+                checkRevision = commit.checkRevision
+                delete commit.checkRevision
                 (data, next) ->                
                     score = Number(data)
                     #first record is likely the actual object
                     #so just drop this data
                     return next() if isNaN score 
-                    if score==commit.checkRevision
+                    if score==checkRevision
                         args = [
                             'zadd'
                             cfg.getCommitsKey(commit.streamId)
@@ -96,43 +98,42 @@ module.exports =
                             JSON.stringify(commit)
                         ]
                         return next null, args
-                    err = new ConcurrencyError "Expected #{commit.checkRevision}, but got #{score}"
+                    err = new ConcurrencyError "Expected #{checkRevision}, but got #{score}"
 
                     next err
-            buildDone = (commit) =>
-                (data, next) ->
-                    delete commit.checkRevision
-                    next null, commit
 
-            validator = -> throw new Error('"validator" not implemented')
-            done = -> throw new Error('"done" not implemented')
-            maxRevision = client.stream()
-            validate = es.map (data, next) =>
-                validator data, next
-            writer = client.stream()
-            finisher = es.map (data, next) =>
-                done data, next
-                pipe.end()
-            pipe = es.pipeline(
-                maxRevision,
-                validate,
-                writer,
-                finisher
-                )
-
-            pipe.on 'data', (data) => pipe.emit 'commit', data
-            pipe.on 'commit', (data) => @emit "#{cfg.id}.commit", data
-
-            originalWrite = pipe.write
-            pipe.write = (commit) =>
+            createPipeline = (commit) ->
                 unless commit
                     throw new Error 'commit object is required'
                 id = cfg.getCommitsKey commit.streamId
+                revisionArgs = es.map (data, next) ->
+                    next null, ['zrevrange', id, 0, 1, 'WITHSCORES']
+                maxRevision = client.stream()
                 validator = buildValidator commit
-                done = buildDone commit
-                originalWrite ['zrevrange', id, 0, 1, 'WITHSCORES' ]
+                writer = client.stream()
+                finish = es.map (data, next) ->
+                    next null, commit
+                pipeline = es.pipeline(
+                    revisionArgs,
+                    maxRevision,
+                    es.map(validator),
+                    writer,
+                    finish)
 
-            return pipe
+            stream = es.map (commit, next) ->
+                #poor man's proxy
+                through = createPipeline commit
+                through.on 'error', next
+                through.pipe es.map (data, ignore) ->
+                    next null, data
+                    ignore()
+                through.write null
+
+
+            stream.on 'data', (data) => stream.emit 'commit', data
+            stream.on 'commit', (data) => @emit "#{cfg.id}.commit", data
+
+            return stream
 
         Storage::read = (filter, callback) ->
             reader = @createReader filter

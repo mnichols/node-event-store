@@ -4,6 +4,7 @@ describe 'redis-integration', ->
     es = require '../event-store'
     Redis = require 'redis-stream'
     redis = require '../storage/redis/redis-stream-storage'
+    redisAuditor = require '../storage/redis/redis-auditor'
     eventStream = require 'event-stream'
 
     beforeEach (done) ->
@@ -20,31 +21,30 @@ describe 'redis-integration', ->
             done()
         flusher.write 'flushdb'
 
-    describe 'redis-admin', ->
+    describe 'redis-auditor', ->
         describe '#throughput', ->
             ts = new Date().getTime()
             numberOfCommits = 100000
             beforeEach (done) ->
                 @timeout(0)
-                sut = require('../storage/redis/redis-admin')
-                @admin = sut.createAdmin cfg
-                @admin.on 'ready', (err, admin) =>
+                @auditor = redisAuditor.createAuditor cfg
+                @auditor.on 'ready', (err) =>
                     streamId = 123
                     writer = cli.stream('zadd')
                     writer.on 'end', =>
                         streamId = 123
-                        auditor = cli.stream('zadd')
-                        auditor.on 'end', ->
+                        streamer = cli.stream('zadd')
+                        streamer.on 'end', ->
                             done()
                         for c in [0...numberOfCommits]
-                            auditor.write ["streamId2RevByTime", 
+                            streamer.write [@auditor.auditKey, 
                                 ts,
                                 JSON.stringify { 
                                         streamId: (streamId++).toString()
                                         streamRevision: 1
                                     }
                                 ]
-                        auditor.end()
+                        streamer.end()
 
                     for c in [0...numberOfCommits]
                         commit = 
@@ -60,7 +60,7 @@ describe 'redis-integration', ->
             it 'should not suck', (done) ->
                 #we are pushing thru 300,000 events in about 20 seconds
                 @timeout(20000)
-                stream = @admin.createEventStream()
+                stream = @auditor.createEventStream()
                 tick = 0
                 stream.on 'data', (data) ->
                     data.a.should.equal 1 if data.a
@@ -75,6 +75,47 @@ describe 'redis-integration', ->
                 stream.write()
 
     describe 'event-store', ->
+        describe '#auditable-pipe from aggregate', ->
+            beforeEach (done) ->
+                @commit1 =
+                    checkRevision: 3
+                    headers: []
+                    streamId: '123'
+                    streamRevision: 3
+                    payload: [
+                        {a:1}
+                        {b:2}
+                        {c:3}
+                    ]
+                    timestamp: new Date(2012,9,1,12,0,0)
+                seed = cli.stream('zadd', 'commits:123', 3)
+                seed.on 'end', ->
+                    done()
+                seed.write JSON.stringify(@commit1)
+                seed.end()
+
+            it 'should work', (done) ->
+                redisStorage = redis.createStorage(cfg)
+                auditor = redisAuditor.createAuditor(cfg)
+                storage = es(redisStorage, auditor)
+
+                filter =
+                    streamId: '123'
+                    minRevision: 0
+                    maxRevision: Number.MAX_VALUE
+
+                stream = storage.open filter
+                events = []
+                aggregate = eventStream.map (data, next) ->
+                    next null, data
+                stream.on 'data', (data) ->
+                    events.push data
+                stream.on 'end', ->
+                    aggregate.pipe(stream.commit).pipe eventStream.map (data, next) ->
+                        done()
+                    aggregate.write events
+
+                stream.read()
         describe '#pipe from aggregate', ->
             beforeEach (done) ->
                 @commit1 =

@@ -1,8 +1,8 @@
-describe 'redis-admin', ->
+describe 'redis-auditor', ->
     cli = null
     cfg = null
     Redis = require 'redis-stream'
-    redisAdmin = require '../storage/redis/redis-admin'
+    auditApi = require '../storage/redis/redis-auditor'
 
     beforeEach (done) ->
         (cli = new Redis 6379, 'localhost', 11)
@@ -80,10 +80,10 @@ describe 'redis-admin', ->
                 @commit5
             ]
 
-            sut = redisAdmin
-            @admin = sut.createAdmin cfg
+            sut = auditApi
+            @auditor = sut.createAuditor cfg
 
-            @admin.on 'ready', (err, admin) =>
+            @auditor.on 'ready', (err, admin) =>
                 writer = cli.stream('zadd')
                 writer.on 'end', =>
                     auditor = cli.stream('zadd')
@@ -110,7 +110,7 @@ describe 'redis-admin', ->
             it 'should emit streamid mapping between given datetime range', (done) ->
                 start = new Date(2012, 9, 8, 7, 0, 0).getTime()
                 end = new Date(2012, 9, 9, 7, 0, 0).getTime()
-                stream = @admin.createRangeStream()
+                stream = @auditor.createRangeStream()
                 vals = []
                 stream.on 'data', (data) ->
                     vals.push data
@@ -123,7 +123,7 @@ describe 'redis-admin', ->
             it 'should create chronological event stream given datetime range', (done) ->
                 start = new Date(2012, 9, 8, 7, 0, 0).getTime()
                 end = new Date(2012, 9, 9, 7, 0, 0).getTime()
-                stream = @admin.createEventStream()
+                stream = @auditor.createEventStream()
                 vals = []
                 stream.on 'data', (data) ->
                     vals.push data

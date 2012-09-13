@@ -10,14 +10,15 @@ defaultCfg =
     auditKey: 'streamIdRevByTime'
 
 module.exports = 
-    createAdmin: (cfg) ->
+    createAuditor: (cfg) ->
         (cfg[k]=defaultCfg[k]) for k,v of defaultCfg when !cfg[k]?
-        Admin =  (cfg) ->
+        Auditor =  (cfg) ->
             EventEmitter2.call @
             (@[k]=cfg[k]) for k,v of cfg
             process.nextTick => @emit 'ready', null, @
-        util.inherits Admin, EventEmitter2
-        Admin::audit = (commit) ->
+        util.inherits Auditor, EventEmitter2
+        Auditor::audit = es.map (commit, next) ->
+            console.log 'auditing', commit
             process.nextTick =>
                 map = 
                     streamId: commit.streamId
@@ -26,16 +27,17 @@ module.exports =
                 auditor.write [
                     'zadd'
                     @auditKey
-                    commit.timestamp.getTime()
+                    new Date(commit.timestamp).getTime()
                     JSON.stringify map
                 ]
                 auditor.end()
+            next()
 
-        Admin::createRangeStream = ->
+        Auditor::createRangeStream = ->
             auditStream = cfg.client.stream 'zrangebyscore', @auditKey
             auditStream
 
-        Admin::createEventStream = ->
+        Auditor::createEventStream = ->
             commitCount = 0
             #default args...everything
             writeArgs = [0, new Date(2999, 12,31).getTime()]
@@ -81,7 +83,7 @@ module.exports =
                 originalWrite writeArgs
             pipe
 
-        new Admin cfg
+        new Auditor cfg
             
 
 
