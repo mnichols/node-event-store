@@ -1,6 +1,8 @@
 {
-    "name" : "node-event-store"
+    "author": "Mike Nichols"
+    ,"name" : "node-event-store"
     ,"description": "event sourcing support using node streams"
+    ,"keywords": ["cqrs", "eventsource", "ddd", "dddd", "eventstore"]
     ,"repository": {
         "type": "git"
         ,"url": "git://github.com/mnichols/node-event-store.git"
@@ -21,6 +23,6 @@
         "mocha": "latest"
         ,"chai": "latest"
     }
-    ,"main" : "index.js"
+    ,"main" : "./index.js"
 }
 
