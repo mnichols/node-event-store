@@ -1,6 +1,5 @@
 es = require 'event-stream'
 createCommit = (cfg) ->
-    console.log 'commitcfg', cfg
     now = new Date()
     utc = Date.UTC now.getFullYear(), 
         now.getMonth(), 
@@ -28,13 +27,13 @@ module.exports = (cfg, storage) ->
         uncommitted = uncommitted.concat events
 
     streamableCommit = es.map (events = [], next) ->
-        console.log 'streamable', events
         addEvents events if events
         cfg =
             streamRevision: cfg.streamRevision
             streamId: streamId
             events: uncommitted
-        next null, createCommit(cfg)
+        commit = createCommit(cfg)
+        next null, commit
 
 
     pipe = es.pipeline(

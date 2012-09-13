@@ -14,9 +14,10 @@ module.exports =
         client = cfg.client
         unless client?
             throw new "A redis client is required"
-        ConcurrencyError = ->
+        ConcurrencyError = (message) ->
             Error.apply @, arguments
             @name = 'ConcurrencyError'
+            @message = message ? 'ConcurrencyError'
 
         ConcurrencyError:: = new Error()
         ConcurrencyError::constructor = ConcurrencyError
@@ -58,6 +59,8 @@ module.exports =
             payload =
                 es.map (data, next) =>
                     return next() unless data.payload
+                    #update the stream's revision
+                    reader.streamRevision = data.streamRevision
                     events = if opts.flatten then flatten(data) else data.payload
                     next null, events
             eachEvent = (require './each-event-stream')()
@@ -74,6 +77,7 @@ module.exports =
                 eachEvent
             )
         
+            reader.streamRevision = 0 #initialize revision
             reader.read = -> reader.write args
 
             return reader
@@ -92,7 +96,9 @@ module.exports =
                             JSON.stringify(commit)
                         ]
                         return next null, args
-                    next new ConcurrencyError()
+                    err = new ConcurrencyError "Expected #{commit.checkRevision}, but got #{score}"
+
+                    next err
             buildDone = (commit) =>
                 (data, next) ->
                     delete commit.checkRevision

@@ -37,14 +37,14 @@ describe 'redis-stream storage', ->
             @commit1 =
                 headers: []
                 streamId: '123'
-                streamRevision: 1
+                streamRevision: 3
                 payload: [
                     {a:1}
                     {b:2}
                     {c:3}
                 ]
                 timestamp: new Date(2012,9,1,12,0,0)
-            seed = cli.stream('zadd', 'commits:123', 1)
+            seed = cli.stream('zadd', 'commits:123', @commit1.streamRevision)
             seed.on 'end', ->
                 done()
             seed.write JSON.stringify(@commit1)
@@ -65,15 +65,16 @@ describe 'redis-stream storage', ->
                     replies.push data
                 reader.on 'end', =>
                     tick.should.equal 3
+                    reader.streamRevision.should.equal 3
                     replies.length.should.equal @commit1.payload.length
                     replies[0].streamId.should.equal '123'
-                    replies[0].streamRevision.should.equal 1
+                    replies[0].streamRevision.should.equal 3
                     replies[0].a.should.equal 1
                     replies[1].streamId.should.equal '123'
-                    replies[1].streamRevision.should.equal 1
+                    replies[1].streamRevision.should.equal 3
                     replies[1].b.should.equal 2
                     replies[2].streamId.should.equal '123'
-                    replies[2].streamRevision.should.equal 1
+                    replies[2].streamRevision.should.equal 3
                     replies[2].c.should.equal 3
                     done()
                 reader.read()
@@ -85,14 +86,14 @@ describe 'redis-stream storage', ->
                 checkRevision: 0
                 headers: []
                 streamId: '123'
-                streamRevision: 1
+                streamRevision: 3
                 payload: [
                     {a:1}
                     {b:2}
                     {c:3}
                 ]
                 timestamp: new Date(2012,9,1,12,0,0)
-            seed = cli.stream('zadd', 'commits:123', 1)
+            seed = cli.stream('zadd', 'commits:123', 3)
             seed.on 'end', ->
                 done()
             seed.write JSON.stringify(@commit1)
