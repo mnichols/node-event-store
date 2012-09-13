@@ -33,15 +33,11 @@ module.exports = (cfg, storage) ->
             streamId: streamId
             events: uncommitted
         commit = createCommit(cfg)
-        next null, commit
+        commitStream.on 'error', next
+        commitStream.pipe es.map (data, ignore) ->
+            next null, data
+            ignore()
+        commitStream.write commit
+        next()
 
-
-    pipe = es.pipeline(
-        streamableCommit,
-        commitStream
-    )
-
-    pipe
-
-
-
+    streamableCommit

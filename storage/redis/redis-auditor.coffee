@@ -18,20 +18,30 @@ module.exports =
             process.nextTick => @emit 'ready', null, @
         util.inherits Auditor, EventEmitter2
         Auditor::audit = es.map (commit, next) ->
-            console.log 'auditing', commit
+            unless commit and commit.timestamp and commit.streamId and commit.streamRevision
+                return next new Error "commit is invalid for audit. " +
+                    "timestamp, streamId, and streamRevision is required."
+
             process.nextTick =>
                 map = 
                     streamId: commit.streamId
                     streamRevision: commit.streamRevision
-                auditor = cfg.client.stream()
-                auditor.write [
+                writeStream = cfg.client.stream()
+                writeStream.on 'data', (reply) ->
+                    if Number(reply) != 1
+                        #too late to do anything about it
+                        @emit 'error',new Error "auditor failed with reply of #{reply}"
+                    writeStream.end()
+                writeStream.on 'error', (err) ->
+                    @emit 'error', err
+                writeStream.write [
                     'zadd'
                     @auditKey
                     new Date(commit.timestamp).getTime()
                     JSON.stringify map
                 ]
-                auditor.end()
-            next()
+            #pass commit on thru
+            next null, commit
 
         Auditor::createRangeStream = ->
             auditStream = cfg.client.stream 'zrangebyscore', @auditKey
@@ -44,7 +54,7 @@ module.exports =
             countStream = cfg.client.stream 'zcount', @auditKey
             countercept = es.map (data, next) ->
                     commitCount = Number(data)
-                    console.log 'redis-admin',"streaming #{commitCount} commits"
+                    console.log 'redis-auditor',"streaming #{commitCount} commits"
                     next null, writeArgs
             auditStream = @createRangeStream()
             commitStream = cfg.client.stream()

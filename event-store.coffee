@@ -1,4 +1,4 @@
-mapStream = require 'map-stream'
+es = require 'event-stream'
 committable = require './committable'
 module.exports = (storage, auditor) ->
     open: (filter) ->
@@ -7,7 +7,7 @@ module.exports = (storage, auditor) ->
         stream.on 'end', ->
             commit = committable stream, storage
             if auditor
-                commit = commit.pipe(auditor.audit)
+                commit = es.pipeline(commit, auditor.audit)
             stream.commit = commit
         return stream
 
