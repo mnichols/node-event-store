@@ -1,7 +1,7 @@
 {
     "author": "Mike Nichols <nichols.mike.s@gmail.com>"
-    ,"name" : "node-event-store"
-    ,"description": "event sourcing support using node streams"
+    ,"name" : "node-event-store-redis"
+    ,"description": "redis support for node-event-store"
     ,"keywords": ["cqrs", "eventsource", "ddd", "dddd", "eventstore"]
     ,"repository": {
         "type": "git"
@@ -18,6 +18,7 @@
         ,"eventemitter2": "latest"
         ,"event-stream": "latest"
         ,"map-stream": "latest"
+        ,"redis-stream": "https://github.com/mnichols/redis-stream/tarball/reply"
     }
     ,"devDependencies" : {
         "mocha": "latest"

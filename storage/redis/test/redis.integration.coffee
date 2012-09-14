@@ -1,10 +1,10 @@
 describe 'redis-integration', ->
     cli = null
     cfg = null
-    es = require '../event-store'
+    es = require '../../../event-store'
     Redis = require 'redis-stream'
-    redis = require '../storage/redis/redis-stream-storage'
-    redisAuditor = require '../storage/redis/redis-auditor'
+    redis = require '../redis-stream-storage'
+    redisAuditor = require '../redis-auditor'
     eventStream = require 'event-stream'
 
     beforeEach (done) ->

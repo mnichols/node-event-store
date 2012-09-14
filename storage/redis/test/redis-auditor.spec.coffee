@@ -2,7 +2,7 @@ describe 'redis-auditor', ->
     cli = null
     cfg = null
     Redis = require 'redis-stream'
-    auditApi = require '../storage/redis/redis-auditor'
+    auditApi = require '../redis-auditor'
 
     beforeEach (done) ->
         (cli = new Redis 6379, 'localhost', 11)

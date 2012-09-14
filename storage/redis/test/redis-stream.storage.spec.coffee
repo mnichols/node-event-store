@@ -1,4 +1,4 @@
-redisStorage = require '../storage/redis/redis-stream-storage'
+redisStorage = require '../redis-stream-storage'
 cli = null
 cfg = null
 Redis = require 'redis-stream'
