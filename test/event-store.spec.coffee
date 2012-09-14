@@ -1,5 +1,5 @@
 es = require 'event-stream'
-store = require '../event-store'
+store = require '..'
 inMem = require '../in-memory-storage'
 describe 'event-store', ->
     storage = null

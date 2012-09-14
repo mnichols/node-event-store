@@ -3,8 +3,7 @@ describe 'redis-integration', ->
     cfg = null
     es = require '../../../event-store'
     Redis = require 'redis-stream'
-    redis = require '../redis-stream-storage'
-    redisAuditor = require '../redis-auditor'
+    redis = require '..'
     eventStream = require 'event-stream'
 
     beforeEach (done) ->
@@ -23,11 +22,12 @@ describe 'redis-integration', ->
 
     describe 'redis-auditor', ->
         describe '#throughput', ->
+            console.log 'redisis', redis
             ts = new Date().getTime()
             numberOfCommits = 100000
             beforeEach (done) ->
                 @timeout(0)
-                @auditor = redisAuditor.createAuditor cfg
+                @auditor = redis.createAuditor cfg
                 @auditor.on 'ready', (err) =>
                     streamId = 123
                     writer = cli.stream('zadd')
@@ -96,7 +96,7 @@ describe 'redis-integration', ->
 
             it 'should work', (done) ->
                 redisStorage = redis.createStorage(cfg)
-                auditor = redisAuditor.createAuditor(cfg)
+                auditor = redis.createAuditor(cfg)
                 storage = es(redisStorage, auditor)
 
                 filter =

@@ -1,2 +1,2 @@
 require('coffee-script')
-require('./event-store')
+module.exports = require('./event-store')

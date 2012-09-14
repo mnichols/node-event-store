@@ -1,3 +1,5 @@
 require('coffee-script')
-require('./redis-stream-storage')
-require('./redis-auditor')
+module.exports = {
+    createStorage: require('./redis-stream-storage').createStorage
+    ,createAuditor: require('./redis-auditor').createAuditor
+}
