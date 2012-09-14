@@ -14,3 +14,10 @@ Currently, only `redis`.
 Please see the `test` folder for examples. Especially `event-store.spec.coffee`.
 
 
+## Testing
+
+    make test
+
+Or for integration testing
+
+    make TEST_TYPE=integration test

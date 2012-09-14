@@ -1,6 +1,6 @@
 es = require 'event-stream'
 store = require '../event-store'
-inMem = require '../storage/in-memory'
+inMem = require '../in-memory-storage'
 describe 'event-store', ->
     storage = null
     Aggregate = ->

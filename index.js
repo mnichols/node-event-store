@@ -1,2 +1,2 @@
 require('coffee-script')
-require('./es')
+require('./event-store')
