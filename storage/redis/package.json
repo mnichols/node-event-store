@@ -8,7 +8,7 @@
         ,"url": "git://github.com/mnichols/node-event-store.git"
     }
     ,"private" : false
-    ,"version" : "0.0.2"
+    ,"version" : "0.0.3"
     ,"engines": {
         "node": ">=0.7.7"
         ,"npm":  "1.x"
