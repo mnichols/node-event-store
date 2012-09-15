@@ -46,6 +46,10 @@ module.exports =
                 es.map (data, next) ->
                     commitCount = Number(data)
                     console.log 'redis-storage',"streaming #{commitCount} commits"
+                    if commitCount == 0
+                        console.log 'redis-storage',
+                            "new stream detected for stream '#{filter.streamId}'"
+                        reader.end()
                     next null, args
             
             flatten = (data) ->

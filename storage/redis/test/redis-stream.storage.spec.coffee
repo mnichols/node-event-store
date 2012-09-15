@@ -30,54 +30,74 @@ describe 'redis-stream storage', ->
 
     describe '#createReader stream', ->
         sut = null
+        describe 'given no commits', ->
+            it 'should emit end', (done) ->
+                @timeout(100)
+                sut = redisStorage
+                sut.createStorage cfg, (err, storage) =>
+                    filter = 
+                        streamId: '123'
+                        minRevision: 0       
+                        maxRevision: Number.MAX_VALUE
+                    reader= storage.createReader filter
+                    tick=0
+                    reader.on 'data', (data) ->
+                        tick++
+                        done new Error 'no data should have been passed'
+                    reader.on 'end', =>
+                        tick.should.equal 0
+                        reader.streamRevision.should.equal 0
+                        done()
+                    reader.read()
+        describe 'given at least one commit', ->
         
-        beforeEach (done) ->
-            @timeout(100)
-            sut = redisStorage
-            @commit1 =
-                headers: []
-                streamId: '123'
-                streamRevision: 3
-                payload: [
-                    {a:1}
-                    {b:2}
-                    {c:3}
-                ]
-                timestamp: new Date(2012,9,1,12,0,0)
-            seed = cli.stream('zadd', 'commits:123', @commit1.streamRevision)
-            seed.on 'end', ->
-                done()
-            seed.write JSON.stringify(@commit1)
-            seed.end()
-        it 'should read all events', (done) ->
-            @timeout(100)
-            sut = redisStorage
-            sut.createStorage cfg, (err, storage) =>
-                filter = 
+            beforeEach (done) ->
+                @timeout(100)
+                sut = redisStorage
+                @commit1 =
+                    headers: []
                     streamId: '123'
-                    minRevision: 0       
-                    maxRevision: Number.MAX_VALUE
-                reader= storage.createReader filter
-                replies = []
-                tick=0
-                reader.on 'data', (data) ->
-                    tick++
-                    replies.push data
-                reader.on 'end', =>
-                    tick.should.equal 3
-                    reader.streamRevision.should.equal 3
-                    replies.length.should.equal @commit1.payload.length
-                    replies[0].streamId.should.equal '123'
-                    replies[0].streamRevision.should.equal 3
-                    replies[0].a.should.equal 1
-                    replies[1].streamId.should.equal '123'
-                    replies[1].streamRevision.should.equal 3
-                    replies[1].b.should.equal 2
-                    replies[2].streamId.should.equal '123'
-                    replies[2].streamRevision.should.equal 3
-                    replies[2].c.should.equal 3
+                    streamRevision: 3
+                    payload: [
+                        {a:1}
+                        {b:2}
+                        {c:3}
+                    ]
+                    timestamp: new Date(2012,9,1,12,0,0)
+                seed = cli.stream('zadd', 'commits:123', @commit1.streamRevision)
+                seed.on 'end', ->
                     done()
-                reader.read()
+                seed.write JSON.stringify(@commit1)
+                seed.end()
+            it 'should read all events', (done) ->
+                @timeout(100)
+                sut = redisStorage
+                sut.createStorage cfg, (err, storage) =>
+                    filter = 
+                        streamId: '123'
+                        minRevision: 0       
+                        maxRevision: Number.MAX_VALUE
+                    reader= storage.createReader filter
+                    replies = []
+                    tick=0
+                    reader.on 'data', (data) ->
+                        tick++
+                        replies.push data
+                    reader.on 'end', =>
+                        tick.should.equal 3
+                        reader.streamRevision.should.equal 3
+                        replies.length.should.equal @commit1.payload.length
+                        replies[0].streamId.should.equal '123'
+                        replies[0].streamRevision.should.equal 3
+                        replies[0].a.should.equal 1
+                        replies[1].streamId.should.equal '123'
+                        replies[1].streamRevision.should.equal 3
+                        replies[1].b.should.equal 2
+                        replies[2].streamId.should.equal '123'
+                        replies[2].streamRevision.should.equal 3
+                        replies[2].c.should.equal 3
+                        done()
+                    reader.read()
     describe '#read', ->
         sut = null
         beforeEach (done) ->

@@ -1,18 +1,16 @@
-node-event-store
+node-event-store-redis
 ================
 
-This package provides support for an event-sourced persistence strategy leveraging node.js's `Stream` interface.
+Redis stream support for `node-event-store`.
 
-This exposes the wonderful `pipe` for reading events into and out of Aggregate roots while making it easy to pipe into your publisher(s).
 
-## Supported DBs
+## Install
 
-Currently, only `redis`.
+`npm install node-event-store-redis`
 
 ## Examples
 
-Please see the `test` folder for examples. Especially `event-store.spec.coffee`.
-
+Please see the `test` folder for examples. Especially `redis.integration.coffee`.
 
 ## Testing
 
