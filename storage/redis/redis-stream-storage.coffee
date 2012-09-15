@@ -109,7 +109,8 @@ module.exports =
                     throw new Error 'commit object is required'
                 id = cfg.getCommitsKey commit.streamId
                 revisionArgs = es.map (data, next) ->
-                    next null, ['zrevrange', id, 0, 1, 'WITHSCORES']
+                    #select just one
+                    next null, ['zrevrange', id, 0, 0, 'WITHSCORES']
                 maxRevision = client.stream()
                 validator = buildValidator commit
                 writer = client.stream()
