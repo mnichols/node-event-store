@@ -21,12 +21,12 @@ module.exports = (cfg, storage) ->
         throw new Error 'streamId is required'
     streamId = cfg.streamId
     uncommitted = []
-    commitStream = storage.createCommitter()
 
     addEvents = (events = []) ->
         uncommitted = uncommitted.concat events
 
     streamableCommit = es.map (events = [], next) ->
+        commitStream = storage.createCommitter()
         addEvents events if events
         cfg =
             streamRevision: cfg.streamRevision
@@ -34,10 +34,11 @@ module.exports = (cfg, storage) ->
             events: uncommitted
         commit = createCommit(cfg)
         commitStream.on 'error', next
+        streamableCommit.on 'end', ->
+            commitStream.end()
         commitStream.pipe es.map (data, ignore) ->
             next null, data
             ignore()
         commitStream.write commit
-        next()
 
     streamableCommit

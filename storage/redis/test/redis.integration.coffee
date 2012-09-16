@@ -22,7 +22,6 @@ describe 'redis-integration', ->
 
     describe 'redis-auditor', ->
         describe '#throughput', ->
-            console.log 'redisis', redis
             ts = new Date().getTime()
             numberOfCommits = 100000
             beforeEach (done) ->
@@ -111,7 +110,8 @@ describe 'redis-integration', ->
                 stream.on 'data', (data) ->
                     events.push data
                 stream.on 'end', =>
-                    aggregate.pipe(stream.commit).pipe eventStream.map (data, next) =>
+                    commitStream = stream.commit
+                    aggregate.pipe(commitStream).pipe eventStream.map (data, next) =>
                         expect = 
                             streamId : '123'
                             streamRevision:events.length + @commit1.streamRevision

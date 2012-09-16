@@ -113,6 +113,7 @@ module.exports =
                     next null, ['zrevrange', id, 0, 0, 'WITHSCORES']
                 maxRevision = client.stream()
                 validator = buildValidator commit
+
                 writer = client.stream()
                 finish = es.map (data, next) ->
                     next null, commit
@@ -123,13 +124,15 @@ module.exports =
                     writer,
                     finish)
 
+
             stream = es.map (commit, next) ->
                 #poor man's proxy
                 through = createPipeline commit
+                stream.on 'end', ->
+                    through.end()
                 through.on 'error', next
-                through.pipe es.map (data, ignore) ->
-                    next null, data
-                    ignore()
+                through.on 'data', (data) ->
+                    next null, commit
                 through.write null
 
 
