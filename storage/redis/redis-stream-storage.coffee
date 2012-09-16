@@ -80,7 +80,10 @@ module.exports =
             )
         
             reader.streamRevision = 0 #initialize revision
-            reader.read = -> reader.write args
+            write = reader.write
+            reader.read = -> write args
+            reader.write = -> 
+                throw new Error('event storage readers are readable only. prefer `read()`')
 
             return reader
         Storage::createCommitter = ->
@@ -133,7 +136,7 @@ module.exports =
                 through.on 'error', next
                 through.on 'data', (data) ->
                     next null, commit
-                through.write null
+                through.write commit
 
 
             stream.on 'data', (data) => stream.emit 'commit', data
