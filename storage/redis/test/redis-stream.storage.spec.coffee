@@ -161,7 +161,7 @@ describe 'redis-stream storage', ->
             sut = redisStorage
             sut = redisStorage
             sut.createStorage cfg, (err, storage) =>
-                emitter = storage.createCommitter()
+                emitter = storage.commitStream @commit, cfg
                 emitter.on 'commit', (data) =>
                     done new Error('fail')
                 emitter.on 'error', (err) =>
@@ -186,7 +186,7 @@ describe 'redis-stream storage', ->
                 timestamp: new Date(2012,9,1,13,0,0)
 
             sut.createStorage cfg, (err, storage) =>
-                emitter =  storage.createCommitter()
+                emitter =  storage.commitStream commit, cfg
                 storage.on "#{cfg.id}.commit", -> done()
                 emitter.write commit
 
@@ -206,17 +206,20 @@ describe 'redis-stream storage', ->
                 timestamp: new Date(2012,9,1,13,0,0)
 
             sut.createStorage cfg, (err, storage) =>
-                emitter =  storage.createCommitter()
+                emitter =  storage.commitStream commit, cfg
                 emitter.on 'commit', (data)=>
                     actual = cli.stream 'zrange', 'commits:123', 0
                     actual.on 'data', (reply) =>
                         data = JSON.parse(reply)
                         data.should.exist
                         data.payload.should.eql commit.payload
+                        assert.isUndefined(data.checkRevision)
                         done()
                     actual.write -1
 
                 emitter.write commit
+
+
     describe '#write-emit again', ->
         it 'should write commit ok', (done) ->
             @timeout(100)
@@ -244,7 +247,7 @@ describe 'redis-stream storage', ->
             stream = cli.stream 'zadd', 'commits:123', 1
             stream.on 'end', ->
                 sut.createStorage cfg, (err, storage) ->
-                    emitter = storage.createCommitter()
+                    emitter = storage.commitStream()
                     emitter.on 'error', (err) ->
                         done new Error 'fail'
                     emitter.on 'commit', (data) ->

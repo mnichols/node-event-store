@@ -1,7 +1,10 @@
 es = require 'event-stream'
+{Stream} = require 'stream'
 Redis = require 'redis-stream'
 {EventEmitter2} = require 'eventemitter2'
 util = require 'util'
+
+concurrencyStream = require './concurrency-stream'
 
 defaultCfg = 
     id: 'redis-storage'
@@ -86,63 +89,47 @@ module.exports =
                 throw new Error('event storage readers are readable only. prefer `read()`')
 
             return reader
-        Storage::createCommitter = ->
-            buildValidator = (commit) =>
-                checkRevision = commit.checkRevision
+
+        Storage::commitStream = ->
+            xformWriteArgs = es.map (commit, next) ->
+                #no need to store this check
                 delete commit.checkRevision
-                (data, next) ->                
-                    score = Number(data)
-                    #first record is likely the actual object
-                    #so just drop this data
-                    return next() if isNaN score 
-                    if score==checkRevision
-                        args = [
-                            'zadd'
-                            cfg.getCommitsKey(commit.streamId)
-                            commit.streamRevision
-                            JSON.stringify(commit)
-                        ]
-                        return next null, args
-                    err = new ConcurrencyError "Expected #{checkRevision}, but got #{score}"
+                args = [
+                    'zadd'
+                    cfg.getCommitsKey(commit.streamId)
+                    commit.streamRevision
+                    JSON.stringify(commit)
+                ]
+                next null, args
+            writer = cfg.client.stream()
+            stream = new Stream()
+            ended = false
+            destroyed = false
+            stream.writable = stream.readable= true
+            stream.write = (commit) ->
+                concurrency = concurrencyStream commit, cfg
+                writer.on 'end', -> 
+                    stream.emit 'data', commit
+                    stream.end()
+                concurrency.on 'error', (err) -> stream.emit 'error', err
+                concurrency.pipe(xformWriteArgs).pipe(writer)
 
-                    next err
+            stream.end = ->
+                return if ended
+                ended = true
+                stream.emit 'end'
+                stream.emit 'close'
 
-            createPipeline = (commit) ->
-                unless commit
-                    throw new Error 'commit object is required'
-                id = cfg.getCommitsKey commit.streamId
-                revisionArgs = es.map (data, next) ->
-                    #select just one
-                    next null, ['zrevrange', id, 0, 0, 'WITHSCORES']
-                maxRevision = client.stream()
-                validator = buildValidator commit
+            stream.destroy = ->
+                stream.emit 'end'
+                stream.emit 'close'
+                ended = true
 
-                writer = client.stream()
-                finish = es.map (data, next) ->
-                    next null, commit
-                pipeline = es.pipeline(
-                    revisionArgs,
-                    maxRevision,
-                    es.map(validator),
-                    writer,
-                    finish)
+            stream.on 'data', (commit) =>
+                stream.emit 'commit', commit
+                @emit "#{cfg.id}.commit", commit
 
-
-            stream = es.map (commit, next) ->
-                #poor man's proxy
-                through = createPipeline commit
-                stream.on 'end', ->
-                    through.end()
-                through.on 'error', next
-                through.on 'data', (data) ->
-                    next null, commit
-                through.write commit
-
-
-            stream.on 'data', (data) => stream.emit 'commit', data
-            stream.on 'commit', (data) => @emit "#{cfg.id}.commit", data
-
-            return stream
+            stream
 
         Storage::read = (filter, callback) ->
             reader = @createReader filter
@@ -157,7 +144,7 @@ module.exports =
             reader.read()
 
         Storage::write = (commit, callback) ->
-            committer = @createCommitter()
+            committer = @commitStream()
             committer.on 'commit', =>
                 args = slice.call arguments
                 args.unshift null

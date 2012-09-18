@@ -42,7 +42,7 @@ describe 'event-store', ->
             stream.read()
 
     
-    describe '#commit', ->
+    describe.skip '#commit', ->
         beforeEach ->
             storage.mount 
                 'commits:123': [
@@ -63,6 +63,8 @@ describe 'event-store', ->
             agg = Aggregate()
             stream.pipe(agg.in)
             stream.on 'end', =>
+                commit = stream.commit
+
                 ck = es.map (commit, next) ->
                     commit.should.exist
                     commit.streamRevision.should.equal 2

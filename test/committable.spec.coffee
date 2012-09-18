@@ -1,9 +1,26 @@
+es = require 'event-stream'
 map = require 'map-stream'
 committable = require '../committable'
 
 describe 'committable', ->
+    describe '#piping events', ->
+        it 'should write commit to underlying storage', (done) ->
+            sut = committable {streamId: 3},
+                writeCommit: (commit) ->
+                    commit.should.exist
+                    commit.streamRevision.should.equal 3
+                    done()
 
-    describe '#commit', ->
+            arr = es.readArray [
+                {a:1}
+                {b:2}
+                {c:3}
+            ]
+            arr.pipe sut
+
+                
+
+    describe.skip '#commit', ->
         it 'should write events to storage', (done) ->
             event = { name: 'a'}
             events = {}

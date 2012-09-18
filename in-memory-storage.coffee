@@ -1,6 +1,5 @@
 util = require 'util'
 {EventEmitter2}= require 'eventemitter2'
-es = require 'event-stream'
 mapStream = require 'map-stream'
 
 defaultCfg =
@@ -27,7 +26,7 @@ module.exports =
 
         Storage::createReader = (filter, opts={flatten:true}) ->
 
-            reader = es.map (data, next) =>
+            reader = mapStream (data, next) =>
                 key = @getCommitsKey filter.streamId
                 commits = @storage[key] ? []
                 return next() unless commits.length > 0
@@ -44,7 +43,7 @@ module.exports =
 
         Storage::createCommitter = ->
 
-            committer = es.map (commit, next) =>
+            committer = mapStream (commit, next) =>
                 key = @getCommitsKey commit.streamId
                 @storage[key] = (@storage[key] ? []).concat commit
                 next null, commit
