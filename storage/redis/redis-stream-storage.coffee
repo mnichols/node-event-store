@@ -25,11 +25,9 @@ module.exports =
         ConcurrencyError:: = new Error()
         ConcurrencyError::constructor = ConcurrencyError
 
-        isArray = (obj) ->
-            Object::toString.call obj == '[object Array]'
         slice = Array::slice
         concat = (target=[], data=[]) -> 
-            data = [data] unless isArray data
+            data = [data] unless Array.isArray data
             Array::push.apply target, data
 
         Storage = (cfg) ->
@@ -38,24 +36,45 @@ module.exports =
             process.nextTick => @emit 'storage.ready', @
 
         util.inherits Storage, EventEmitter2
-        Storage::createReader = (filter, opts={flatten:true}) ->
+        Storage::createReader = (filter, opts = {}) ->
+            defaultOpts = 
+                enrich:false
+                flatten: true
+            (opts[k]=defaultOpts[k]) for k,v of defaultOpts when !opts[k]
             id = cfg.getCommitsKey(filter.streamId)
-            args = [id, filter.minRevision, filter.maxRevision]
-            reader = null
-            commitCount = 0
-            countStream = cfg.client.stream 'zcount'
-            rangeStream = cfg.client.stream 'zrangebyscore'
-            countercept =
-                es.map (data, next) ->
-                    commitCount = Number(data)
-                    console.log 'redis-storage',"streaming #{commitCount} commits"
-                    if commitCount == 0
-                        console.log 'redis-storage',
-                            "new stream detected for stream '#{filter.streamId}'"
-                        reader.end()
-                    next null, args
+            args = (cmd) -> 
+                arr = [id, filter.minRevision, filter.maxRevision]
+                arr.unshift cmd
+                arr
+            inputs = 0
+            ended = false
+            paused = false
+            tryFlush = -> throw new Error('flushing has not been enabled yet')
+            stream = new Stream()
+            stream.readable = true
+            stream.writable = false
+            stream.streamRevision = 0
+
+            stream.pause = ->
+                paused = true
+
+            stream.resume = ->
+                paused = false
+                tryFlush()
+
+            stream.end = ->
+                return if ended
+                ended = true
+                stream.emit 'end'
+                stream.emit 'close'
+
+            stream.destroy = ->
+                return if ended
+                ended = true
+                stream.emit 'end'
+                stream.emit 'close'
             
-            flatten = (data) ->
+            enrich = (data) ->
                 events = data.payload.map (e) ->
                     (e[k]=data[k]) for k,v of data when k!='payload'
                     e
@@ -65,30 +84,47 @@ module.exports =
                 es.map (data, next) =>
                     return next() unless data.payload
                     #update the stream's revision
-                    reader.streamRevision = data.streamRevision
-                    events = if opts.flatten then flatten(data) else data.payload
-                    next null, events
-            eachEvent = (require './each-event-stream')()
-            
-            eachEvent.on 'tick', (inputs) =>
-                reader.end() if inputs>=commitCount
+                    stream.streamRevision = data.streamRevision
+                    return next null, data.payload unless opts.enrich
+                    next null, enrich(data)
 
-            reader = es.pipeline(
-                countStream,
-                countercept,
-                rangeStream,
-                es.parse(),
-                payload,
-                eachEvent
-            )
+            each = es.through (events) ->
+                inputs++
+                console.log 'flatten', opts.flatten
+                if opts.flatten
+                    for e in events
+                        stream.emit 'data', e
+                else
+                    stream.emit 'data', events    
+                tryFlush()
+
+            flusher = (commitCount) ->
+                ->
+                    return if paused or inputs < commitCount
+                    stream.end()
         
-            reader.streamRevision = 0 #initialize revision
-            write = reader.write
-            reader.read = -> write args
-            reader.write = -> 
-                throw new Error('event storage readers are readable only. prefer `read()`')
+            _read = (commitCount) ->
+                console.log 'redis-storage',"streaming #{commitCount} commits"
+                tryFlush = flusher commitCount
+                rangeStream = cfg.client.stream()
+                rangeStream.pipe(es.parse()).pipe(payload).pipe(each)
+                rangeStream.write args('zrangebyscore')
 
-            return reader
+
+            _begin = ->
+                countStream = cfg.client.stream()
+                countStream.on 'data', (data) ->
+                    commitCount = Number(data)
+                    if commitCount==0
+                        console.log 'redis-storage',
+                            "new stream detected for stream '#{filter.streamId}'"
+                        countStream.end()
+                        return stream.end()
+                    _read(commitCount)
+                countStream.write args('zcount')
+
+            process.nextTick _begin
+            return stream
 
         Storage::commitStream = ->
             xformWriteArgs = es.map (commit, next) ->
@@ -132,16 +168,11 @@ module.exports =
             stream
 
         Storage::read = (filter, callback) ->
-            reader = @createReader filter
-            events = []
-            reader.on 'error', => 
-                events = []
-                callback.apply  @, arguments
-            reader.on 'data', (data) =>
-                events.push data
-            reader.on 'end', =>
-                callback null, events
-            reader.read()
+            reader = @createReader filter,
+                enrich: false
+                flatten: true
+            buf = es.writeArray callback
+            reader.pipe buf
 
         Storage::write = (commit, callback) ->
             committer = @commitStream()

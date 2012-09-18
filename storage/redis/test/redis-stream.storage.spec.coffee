@@ -34,6 +34,9 @@ describe 'redis-stream storage', ->
             it 'should emit end', (done) ->
                 @timeout(100)
                 sut = redisStorage
+                ck = es.through (event) ->
+                    tick++
+                    done new Error 'no data should have been passed'
                 sut.createStorage cfg, (err, storage) =>
                     filter = 
                         streamId: '123'
@@ -41,14 +44,11 @@ describe 'redis-stream storage', ->
                         maxRevision: Number.MAX_VALUE
                     reader= storage.createReader filter
                     tick=0
-                    reader.on 'data', (data) ->
-                        tick++
-                        done new Error 'no data should have been passed'
                     reader.on 'end', =>
                         tick.should.equal 0
                         reader.streamRevision.should.equal 0
                         done()
-                    reader.read()
+                    reader.pipe(ck)
         describe 'given at least one commit', ->
         
             beforeEach (done) ->
@@ -77,10 +77,11 @@ describe 'redis-stream storage', ->
                         streamId: '123'
                         minRevision: 0       
                         maxRevision: Number.MAX_VALUE
-                    reader= storage.createReader filter
+                    reader= storage.createReader filter, 
+                        enrich: true
                     replies = []
                     tick=0
-                    reader.on 'data', (data) ->
+                    ck = es.through (data) ->
                         tick++
                         replies.push data
                     reader.on 'end', =>
@@ -97,7 +98,7 @@ describe 'redis-stream storage', ->
                         replies[2].streamRevision.should.equal 3
                         replies[2].c.should.equal 3
                         done()
-                    reader.read()
+                    reader.pipe(ck)
     describe '#read', ->
         sut = null
         beforeEach (done) ->
