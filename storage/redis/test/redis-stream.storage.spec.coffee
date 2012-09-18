@@ -13,10 +13,9 @@ describe 'redis-stream storage', ->
 
     afterEach (done) ->
         flusher = cli.stream()
-        flusher.on 'data', (reply) -> 
-            flusher.end()
-            done()
         flusher.write 'flushdb'
+        flusher.end()
+        done()
 
     describe '#init', ->
         it 'should emit ready event', (done) ->
@@ -191,6 +190,31 @@ describe 'redis-stream storage', ->
                 storage.on "#{cfg.id}.commit", -> done()
                 emitter.write commit
 
+        it 'should pipe commit ok', (done) ->
+            @timeout(100)
+            sut = redisStorage
+            commit =
+                checkRevision: 0
+                headers: []
+                streamId: '123'
+                streamRevision: 3
+                payload: [
+                    {a:1}
+                    {b:2}
+                    {c:3}
+                ]
+                timestamp: new Date(2012,9,1,13,0,0)
+
+            sut.createStorage cfg, (err, storage) =>
+                emitter =  storage.commitStream commit, cfg
+                meh = es.readable (cnt, callback) ->
+                    if cnt > 0
+                        return meh.emit 'end'
+                    callback null, commit
+                verify = es.through (data) ->
+                    data.payload.should.eql commit.payload
+                    done()
+                meh.pipe(emitter).pipe(verify)
         it 'should write commit ok', (done) ->
             @timeout(100)
             sut = redisStorage

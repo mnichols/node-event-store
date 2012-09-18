@@ -45,9 +45,9 @@ module.exports =
             reader.streamRevision = high
             reader
 
-        Storage::createCommitter = ->
+        Storage::commitStream = ->
 
-            committer = mapStream (commit, next) =>
+            committer = es.map (commit, next) =>
                 key = @getCommitsKey commit.streamId
                 @storage[key] = (@storage[key] ? []).concat commit
                 next null, commit

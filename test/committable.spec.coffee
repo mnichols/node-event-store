@@ -6,7 +6,7 @@ describe 'committable', ->
     describe '#piping events', ->
         it 'should write commit to underlying storage', (done) ->
             sut = committable {streamId: 3},
-                writeCommit: (commit) ->
+                commitStream: -> es.through (commit) ->
                     commit.should.exist
                     commit.streamRevision.should.equal 3
                     done()

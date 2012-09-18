@@ -27,6 +27,8 @@ module.exports = (cfg, storage) ->
         streamId: cfg.streamId
     commit = createCommit(cfg)
     streamable = new CommitStream commit
-    streamable.on 'committable', (commit) ->
-        storage.writeCommit commit
-    streamable
+    thru = es.map (data, next) ->
+        console.log 'thrudata', data
+        next null, data
+    pipe = es.pipeline(streamable, storage.commitStream()) 
+    pipe

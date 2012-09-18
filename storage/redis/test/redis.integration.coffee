@@ -14,10 +14,10 @@ describe 'redis-integration', ->
 
     afterEach (done) ->
         flusher = cli.stream()
-        flusher.on 'data', (reply) -> 
-            flusher.end()
-            done()
         flusher.write 'flushdb'
+
+        flusher.end()
+        done()
 
     createAggregate = ->
         Aggregate = ->
@@ -100,6 +100,7 @@ describe 'redis-integration', ->
                 seed.end()
 
             it 'should work', (done) ->
+                @timeout 2000
                 redisStorage = redis.createStorage(cfg)
                 auditor = redis.createAuditor(cfg)
                 storage = eventStore(redisStorage, auditor)
@@ -111,22 +112,23 @@ describe 'redis-integration', ->
 
                 stream = storage.open filter
                 aggregate = createAggregate()
-                pending = es.readArray [{d:4}]
-                pending.on 'end', =>
-                    process.nextTick =>
-                        expect = 
-                            streamId : '123'
-                            streamRevision:1 + @commit1.streamRevision
-                        verify = es.through (data) =>
-                            data.streamId.should.equal expect.streamId
-                            data.streamRevision.should.equal(expect.streamRevision)
-                            done()
-                        checker = cli.stream()
-                        checker.pipe(es.parse()).pipe(verify)
-                        checker.write ['zrange', auditor.auditKey, 0, 1 ]
+                assertion = es.through (commit) ->
+                    expect = 
+                        streamId : '123'
+                        streamRevision:1 + @commit1.streamRevision
+                    verify = es.through (data) =>
+                        console.log 'verifying', data
+                        data.streamId.should.equal expect.streamId
+                        data.streamRevision.should.equal(expect.streamRevision)
+                        done()
+                    checker = cli.stream()
+                    checker.pipe(es.parse()).pipe(verify)
+                    checker.write ['zrange', auditor.auditKey, 0, 1 ]
 
                 stream.on 'end', ->
-                    pending.pipe(stream.commit)
+                    pending = es.readArray [{d:4}]
+                    pending.pipe(stream.commit).pipe(assertion)
+
                 stream.pipe(aggregate)
         describe '#pipe from aggregate', ->
             beforeEach (done) ->
@@ -155,14 +157,16 @@ describe 'redis-integration', ->
                     minRevision: 0
                     maxRevision: Number.MAX_VALUE
 
+                
                 stream = storage.open filter
-                
-                aggregate = es.map (data, next) ->
-                    next null, data
-                
-                stream.pipe(aggregate)
-                    .pipe(stream.commit).on 'end', ->
+                aggregate = createAggregate()
+                stream.on 'end', ->
+                    pending = es.readArray [{d:4}]
+                    assertion = es.through (commit) ->
+                        console.log commit
                         done()
+                    pending.pipe(stream.commit).pipe(assertion)
+                stream.pipe(aggregate)
 
 
         describe '#pipe into aggregate', ->

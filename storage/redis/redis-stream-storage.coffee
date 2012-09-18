@@ -136,25 +136,42 @@ module.exports =
             stream = new Stream()
             ended = false
             destroyed = false
+            paused = true
+            commitReply = null
             stream.writable = stream.readable= true
             stream.write = (commit) ->
                 concurrency = concurrencyStream commit, cfg
-                writer.on 'end', -> 
+                thru = es.through (reply) ->
+                    commitReply = reply
                     stream.emit 'data', commit
-                    stream.end()
-                concurrency.on 'error', (err) -> stream.emit 'error', err
-                concurrency.pipe(xformWriteArgs).pipe(writer)
+                    stream.resume()
+                concurrency.on 'error', (err) -> 
+                    stream.emit 'error', err
+                concurrency.pipe(xformWriteArgs)
+                    .pipe(writer)
+                    .pipe(thru)
+                return true
+
+            stream.pause = ->
+                paused = true
+            stream.resume = ->
+                paused = false
+                return unless commitReply
+                stream.end()
 
             stream.end = ->
-                return if ended
+                return if ended or paused
                 ended = true
+                stream.writable = stream.readable = false
                 stream.emit 'end'
                 stream.emit 'close'
 
             stream.destroy = ->
+                return if ended
+                ended = true
+                stream.readable = stream.writable = false
                 stream.emit 'end'
                 stream.emit 'close'
-                ended = true
 
             stream.on 'data', (commit) =>
                 stream.emit 'commit', commit

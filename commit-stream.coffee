@@ -7,42 +7,43 @@ module.exports = (commit) ->
     unless commit.streamId? and commit.streamRevision?
         throw new Error('commit must have streamId and streamRevision')
     commit.payload = commit.payload ? []
-    inner = new Stream()
-    inner.writable = true
-    inner.readable = true
+    stream = new Stream()
+    stream.writable = true
+    stream.readable = true
     ended = false
     destroyed = false
     paused = false
-    inner.write = (data) ->
+    stream.write = (data) ->
         if ended or destroyed
             throw new Error 'commit-stream no longer writable'
         return true unless data
         commit.streamRevision++
         commit.payload.push data
         return true
-    inner.pause = ->
+    stream.pause = ->
         paused = true
-    inner.resume = ->
+    stream.resume = ->
         paused = false
-        inner.end() if ended
-    inner.end = ->
+        stream.end() if ended
+    stream.on 'end', ->
+        stream.readable = false
+        stream.emit 'data', commit
+        stream.readable = false
+    stream.end = ->
+        return if ended
         ended = true
-        inner.writable = false
+        stream.writable = false
         return if paused
-        ended = true
-        inner.readable = false
-        inner.emit 'data', commit
-        inner.emit 'end'
-        inner.emit 'close'
+        stream.emit 'end'
+        stream.emit 'close'
 
-    inner.destroy = ->
+    stream.destroy = ->
         if destroyed
             throw new Error 'commit-stream already destroyed'
-
-        inner.writable = inner.readable = false
+        stream.writable = stream.readable = false
         destroyed = true
         commit = null
-        inner.emit 'end'
-        inner.emit 'close'
+        stream.emit 'end'
+        stream.emit 'close'
 
-    inner
+    stream
