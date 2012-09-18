@@ -1,6 +1,6 @@
 util = require 'util'
 {EventEmitter2}= require 'eventemitter2'
-mapStream = require 'map-stream'
+es = require 'event-stream'
 
 defaultCfg =
     id: 'in-memory'
@@ -24,21 +24,25 @@ module.exports =
         Storage::purge = ->
             @storage = {}
 
-        Storage::createReader = (filter, opts={flatten:true}) ->
+        Storage::createReader = (filter, opts = {}) ->
+            defaultOpts = 
+                flatten: true
+                enrich: false
+            (opts[k]=defaultOpts[k]) for k,v of defaultOpts
 
-            reader = mapStream (data, next) =>
-                key = @getCommitsKey filter.streamId
-                commits = @storage[key] ? []
-                return next() unless commits.length > 0
-                for c in commits when c.streamRevision >= filter.minRevision and c.streamRevision <= filter.maxRevision
-                    reader.streamRevision = c.streamRevision
-                    for e in c.payload
-                        next null, e
+            key = @getCommitsKey filter.streamId
+            commits = @storage[key] ? []
+            high = 0
+            events = []
+            for c in commits when c.streamRevision >= filter.minRevision and c.streamRevision <= filter.maxRevision
+                high = c.streamRevision
+                if opts.flatten
+                    events = events.concat c.payload
+                else
+                    events.push c.payload
 
-                reader.end()
-
-            reader.streamRevision = 0
-            reader.read = -> reader.write null
+            reader = es.readArray events
+            reader.streamRevision = high
             reader
 
         Storage::createCommitter = ->

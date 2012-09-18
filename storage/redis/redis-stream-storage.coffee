@@ -83,6 +83,7 @@ module.exports =
 
             each = es.through (events) ->
                 inputs++
+                #buffer if paused
                 if opts.flatten
                     for e in events
                         stream.emit 'data', e
@@ -92,6 +93,8 @@ module.exports =
 
             flusher = (commitCount) ->
                 ->
+                    #todo need to buffer during pause 
+                    #and then emit data events on resume
                     return if paused or inputs < commitCount
                     stream.end()
         

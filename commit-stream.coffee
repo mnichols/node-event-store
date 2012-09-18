@@ -19,6 +19,7 @@ module.exports = (commit) ->
         return true unless data
         commit.streamRevision++
         commit.payload.push data
+        return true
     inner.pause = ->
         paused = true
     inner.resume = ->

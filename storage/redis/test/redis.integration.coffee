@@ -1,10 +1,10 @@
 describe 'redis-integration', ->
     cli = null
     cfg = null
-    es = require '../../../event-store'
+    eventStore = require '../../../event-store'
     Redis = require 'redis-stream'
     redis = require '..'
-    eventStream = require 'event-stream'
+    es = require 'event-stream'
 
     beforeEach (done) ->
         (cli = new Redis 6379, 'localhost', 11)
@@ -19,6 +19,13 @@ describe 'redis-integration', ->
             done()
         flusher.write 'flushdb'
 
+    createAggregate = ->
+        Aggregate = ->
+        agg = new Aggregate()
+        bucket = require('../../../bucket-stream')()
+        es.pipeline bucket, es.map (events, next) ->
+            agg.events = events
+            next null, agg
     describe 'redis-auditor', ->
         describe '#throughput', ->
             ts = new Date().getTime()
@@ -95,7 +102,7 @@ describe 'redis-integration', ->
             it 'should work', (done) ->
                 redisStorage = redis.createStorage(cfg)
                 auditor = redis.createAuditor(cfg)
-                storage = es(redisStorage, auditor)
+                storage = eventStore(redisStorage, auditor)
 
                 filter =
                     streamId: '123'
@@ -103,34 +110,24 @@ describe 'redis-integration', ->
                     maxRevision: Number.MAX_VALUE
 
                 stream = storage.open filter
-                events = []
-                aggregate = eventStream.map (data, next) ->
-                    events.push data
-                    next null, data
-                doSomething = es.map (data, next) ->
-                    #TODO
-                commitStream = stream.commit
-                commitStream.on 'end', =>
-                    expect = 
-                        streamId : '123'
-                        streamRevision:events.length + @commit1.streamRevision
-                    checker = eventStream.pipeline(
-                        cli.stream('zrange', auditor.auditKey, 0),
-                        eventStream.parse(),
-                        eventStream.map (data, next) ->
-                            next null, data
-                        eventStream.map (data, next) =>
+                aggregate = createAggregate()
+                pending = es.readArray [{d:4}]
+                pending.on 'end', =>
+                    process.nextTick =>
+                        expect = 
+                            streamId : '123'
+                            streamRevision:1 + @commit1.streamRevision
+                        verify = es.through (data) =>
                             data.streamId.should.equal expect.streamId
                             data.streamRevision.should.equal(expect.streamRevision)
-                            next null, null
-                            checker.end()
-                        )
-                    checker.on 'end', -> done()
-                    checker.write '1'
+                            done()
+                        checker = cli.stream()
+                        checker.pipe(es.parse()).pipe(verify)
+                        checker.write ['zrange', auditor.auditKey, 0, 1 ]
 
+                stream.on 'end', ->
+                    pending.pipe(stream.commit)
                 stream.pipe(aggregate)
-                    .pipe(doSomething)
-                    .pipe(stream.commit)
         describe '#pipe from aggregate', ->
             beforeEach (done) ->
                 @commit1 =
@@ -151,7 +148,7 @@ describe 'redis-integration', ->
                 seed.end()
 
             it 'should work', (done) ->
-                storage = es(redis.createStorage(cfg))
+                storage = eventStore(redis.createStorage(cfg))
 
                 filter =
                     streamId: '123'
@@ -160,7 +157,7 @@ describe 'redis-integration', ->
 
                 stream = storage.open filter
                 
-                aggregate = eventStream.map (data, next) ->
+                aggregate = es.map (data, next) ->
                     next null, data
                 
                 stream.pipe(aggregate)
@@ -189,7 +186,7 @@ describe 'redis-integration', ->
 
             it 'should work', (done) ->
                 @timeout 10
-                storage = es(redis.createStorage(cfg))
+                storage = eventStore(redis.createStorage(cfg))
                 filter =
                     streamId: '123'
                     minRevision: 0
@@ -202,7 +199,7 @@ describe 'redis-integration', ->
                     received.length.should.equal 3
                     done()
 
-                aggregate = eventStream.through (event) ->
+                aggregate = es.through (event) ->
                     #do stuff with event here
                     received.push event
                 stream.pipe aggregate

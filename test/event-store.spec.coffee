@@ -1,20 +1,20 @@
+{Stream} = require 'stream'
 es = require 'event-stream'
 store = require '..'
 inMem = require '../in-memory-storage'
 describe 'event-store', ->
     storage = null
-    Aggregate = ->
-        events = []
-        events: events
-        in: es.map (data, next) ->
-            events.push data
-            next()
-        out: es.map (data, next) ->
-            next null, data
         
     beforeEach ->
         storage = inMem.createStorage()
 
+    createAggregate = ->
+        Aggregate = ->
+        agg = new Aggregate()
+        bucket = require('../bucket-stream')()
+        es.pipeline bucket, es.map (events, next) ->
+            agg.events = events
+            next null, agg
     
     describe '#open to read', ->
         it 'should read events from storage', (done) ->
@@ -32,14 +32,13 @@ describe 'event-store', ->
                 streamId: '123'
             received = []
             stream = sut.open filter
-            agg = new Aggregate()
-            stream.on 'end', ->
+            aggStream = createAggregate()
+            stream.pipe(aggStream).pipe es.through (agg) ->
                 agg.events.length.should.equal 1
                 agg.events[0].should.eql
                     a: 1
                 done()
-            stream.pipe agg.in
-            stream.read()
+
 
     
     describe.skip '#commit', ->

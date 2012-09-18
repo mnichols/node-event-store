@@ -14,6 +14,7 @@ module.exports =
         (cfg[k]=defaultCfg[k]) for k,v of defaultCfg when !cfg[k]?
 
         writeAuditEntry = (commit, next) ->
+            console.log 'received commit', commit
             unless commit and commit.timestamp and commit.streamId and commit.streamRevision
                 console.error util.inspect commit
                 return next new Error "commit is invalid for audit. " +

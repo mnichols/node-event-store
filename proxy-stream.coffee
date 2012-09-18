@@ -21,6 +21,9 @@ module.exports = (target) ->
         return next disabled
     proxy.pipe = (dest) ->
         target.pipe(check).pipe(dest)
+    proxy.write = (data) ->
+        args = Array::slice.call arguments
+        target.write.apply target, args
     proxy.enable = ->
         enabled = true
     proxy
