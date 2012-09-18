@@ -15,6 +15,7 @@ module.exports =
 
         writeAuditEntry = (commit, next) ->
             unless commit and commit.timestamp and commit.streamId and commit.streamRevision
+                console.error util.inspect commit
                 return next new Error "commit is invalid for audit. " +
                     "timestamp, streamId, and streamRevision is required."
 

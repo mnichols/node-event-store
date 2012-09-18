@@ -9,7 +9,6 @@ describe 'redis-integration', ->
     beforeEach (done) ->
         (cli = new Redis 6379, 'localhost', 11)
         cfg =
-            id: 'myhairystorage'
             client: cli
         done()
 
@@ -106,31 +105,32 @@ describe 'redis-integration', ->
                 stream = storage.open filter
                 events = []
                 aggregate = eventStream.map (data, next) ->
-                    next null, data
-                stream.on 'data', (data) ->
                     events.push data
-                stream.on 'end', =>
-                    commitStream = stream.commit
-                    aggregate.pipe(commitStream).pipe eventStream.map (data, next) =>
-                        expect = 
-                            streamId : '123'
-                            streamRevision:events.length + @commit1.streamRevision
-                        checker = eventStream.pipeline(
-                            cli.stream('zrange', auditor.auditKey, 0),
-                            eventStream.parse(),
-                            eventStream.map (data, next) ->
-                                next null, data
-                            eventStream.map (data, next) =>
-                                data.streamId.should.equal expect.streamId
-                                data.streamRevision.should.equal(expect.streamRevision)
-                                next null, null
-                                checker.end()
-                            )
-                        checker.on 'end', -> done()
-                        checker.write '1'
-                    aggregate.write events
+                    next null, data
+                doSomething = es.map (data, next) ->
+                    #TODO
+                commitStream = stream.commit
+                commitStream.on 'end', =>
+                    expect = 
+                        streamId : '123'
+                        streamRevision:events.length + @commit1.streamRevision
+                    checker = eventStream.pipeline(
+                        cli.stream('zrange', auditor.auditKey, 0),
+                        eventStream.parse(),
+                        eventStream.map (data, next) ->
+                            next null, data
+                        eventStream.map (data, next) =>
+                            data.streamId.should.equal expect.streamId
+                            data.streamRevision.should.equal(expect.streamRevision)
+                            next null, null
+                            checker.end()
+                        )
+                    checker.on 'end', -> done()
+                    checker.write '1'
 
-                stream.read()
+                stream.pipe(aggregate)
+                    .pipe(doSomething)
+                    .pipe(stream.commit)
         describe '#pipe from aggregate', ->
             beforeEach (done) ->
                 @commit1 =
@@ -159,17 +159,13 @@ describe 'redis-integration', ->
                     maxRevision: Number.MAX_VALUE
 
                 stream = storage.open filter
-                events = []
+                
                 aggregate = eventStream.map (data, next) ->
                     next null, data
-                stream.on 'data', (data) ->
-                    events.push data
-                stream.on 'end', ->
-                    aggregate.pipe(stream.commit).pipe eventStream.map (data, next) ->
+                
+                stream.pipe(aggregate)
+                    .pipe(stream.commit).on 'end', ->
                         done()
-                    aggregate.write events
-
-                stream.read()
 
 
         describe '#pipe into aggregate', ->
@@ -192,6 +188,7 @@ describe 'redis-integration', ->
                 seed.end()
 
             it 'should work', (done) ->
+                @timeout 10
                 storage = es(redis.createStorage(cfg))
                 filter =
                     streamId: '123'
@@ -205,10 +202,8 @@ describe 'redis-integration', ->
                     received.length.should.equal 3
                     done()
 
-                aggregate = eventStream.map (event, next) ->
+                aggregate = eventStream.through (event) ->
                     #do stuff with event here
                     received.push event
-                    next()
                 stream.pipe aggregate
-                stream.read()
 

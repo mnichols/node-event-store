@@ -17,13 +17,6 @@ module.exports =
         client = cfg.client
         unless client?
             throw new "A redis client is required"
-        ConcurrencyError = (message) ->
-            Error.apply @, arguments
-            @name = 'ConcurrencyError'
-            @message = message ? 'ConcurrencyError'
-
-        ConcurrencyError:: = new Error()
-        ConcurrencyError::constructor = ConcurrencyError
 
         slice = Array::slice
         concat = (target=[], data=[]) -> 
