@@ -90,7 +90,6 @@ module.exports =
 
             each = es.through (events) ->
                 inputs++
-                console.log 'flatten', opts.flatten
                 if opts.flatten
                     for e in events
                         stream.emit 'data', e
