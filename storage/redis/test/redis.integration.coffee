@@ -99,7 +99,7 @@ describe 'redis-integration', ->
                 seed.end()
 
             it 'should work', (done) ->
-                @timeout 2000
+                @timeout 100
                 redisStorage = redis.createStorage(cfg)
                 auditor = redis.createAuditor(cfg)
                 storage = eventStore(redisStorage, auditor)
@@ -117,7 +117,6 @@ describe 'redis-integration', ->
                         streamRevision:1 + @commit1.streamRevision
 
                     verify = es.through (data) =>
-                        console.log 'verifying', data
                         data.streamId.should.equal expect.streamId
                         data.streamRevision.should.equal(expect.streamRevision)
                         done()
@@ -169,11 +168,12 @@ describe 'redis-integration', ->
 
 
         describe '#pipe into aggregate', ->
+            streamId = 'intoagg'
             beforeEach (done) ->
                 @commit1 =
                     checkRevision: 0
                     headers: []
-                    streamId: '123'
+                    streamId: streamId
                     streamRevision: 3
                     payload: [
                         {a:1}
@@ -181,7 +181,7 @@ describe 'redis-integration', ->
                         {c:3}
                     ]
                     timestamp: new Date(2012,9,1,12,0,0)
-                seed = cli.stream('zadd', 'commits:123', 1)
+                seed = cli.stream('zadd', 'commits:intoagg', 1)
                 seed.on 'end', ->
                     done()
                 seed.write JSON.stringify(@commit1)
@@ -191,7 +191,7 @@ describe 'redis-integration', ->
                 @timeout 10
                 storage = eventStore(redis.createStorage(cfg))
                 filter =
-                    streamId: '123'
+                    streamId: streamId
                     minRevision: 0
                     maxRevision: Number.MAX_VALUE
                 stream = storage.open filter
