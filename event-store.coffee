@@ -14,8 +14,8 @@ module.exports = (storage, auditor) ->
             #have been read
             commit = committable stream, storage
             if auditor 
-                audit = auditor.createAudit()
-                commit = es.pipeline(commit, audit)
+                audit = auditor.createAudit()                
+                commit.pipe audit
             proxyCommit.enable commit
         return stream
 

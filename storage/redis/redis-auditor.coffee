@@ -13,9 +13,10 @@ module.exports =
     createAuditor: (cfg) ->
         (cfg[k]=defaultCfg[k]) for k,v of defaultCfg when !cfg[k]?
 
+        auditable = (commit) ->
+            return commit && commit.timestamp && commit.streamId && commit.streamRevision
         writeAuditEntry = (commit, next) ->
-            console.log 'received commit', commit
-            unless commit and commit.timestamp and commit.streamId and commit.streamRevision
+            unless auditable(commit)
                 console.error util.inspect commit
                 return next new Error "commit is invalid for audit. " +
                     "timestamp, streamId, and streamRevision is required."

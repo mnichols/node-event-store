@@ -113,6 +113,7 @@ describe 'redis-integration', ->
                 stream = storage.open filter
                 aggregate = createAggregate()
                 assertion = es.through (commit) ->
+                    console.log 'assertion', commit
                     expect = 
                         streamId : '123'
                         streamRevision:1 + @commit1.streamRevision

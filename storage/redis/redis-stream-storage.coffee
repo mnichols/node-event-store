@@ -98,20 +98,20 @@ module.exports =
                     return if paused or inputs < commitCount
                     stream.end()
         
-            _read = (commitCount) ->
-                console.log 'redis-storage',"streaming #{commitCount} commits"
+            _read = (commitCount) =>
+                console.log @id,"streaming #{commitCount} commits"
                 tryFlush = flusher commitCount
                 rangeStream = cfg.client.stream()
                 rangeStream.pipe(es.parse()).pipe(payload).pipe(each)
                 rangeStream.write args('zrangebyscore')
 
 
-            _begin = ->
+            _begin = =>
                 countStream = cfg.client.stream()
-                countStream.on 'data', (data) ->
+                countStream.on 'data', (data) =>
                     commitCount = Number(data)
                     if commitCount==0
-                        console.log 'redis-storage',
+                        console.log @id,
                             "new stream detected for stream '#{filter.streamId}'"
                         countStream.end()
                         return stream.end()
@@ -132,52 +132,23 @@ module.exports =
                     JSON.stringify(commit)
                 ]
                 next null, args
+
             writer = cfg.client.stream()
-            stream = new Stream()
-            ended = false
-            destroyed = false
-            paused = true
-            commitReply = null
-            stream.writable = stream.readable= true
-            stream.write = (commit) ->
+            stream = es.map (commit, next) =>
                 concurrency = concurrencyStream commit, cfg
-                thru = es.through (reply) ->
-                    commitReply = reply
-                    stream.emit 'data', commit
-                    stream.resume()
+                _write = ->
+                _end = =>
+                    stream.emit 'commit', commit
+                    @emit "#{cfg.id}.commit", commit
+                    next null, commit
+                thru = es.through _write, _end
                 concurrency.on 'error', (err) -> 
-                    stream.emit 'error', err
+                    next err
                 concurrency.pipe(xformWriteArgs)
                     .pipe(writer)
-                    .pipe(thru)
-                return true
+                    .pipe(es.through(_write, _end))
 
-            stream.pause = ->
-                paused = true
-            stream.resume = ->
-                paused = false
-                return unless commitReply
-                stream.end()
-
-            stream.end = ->
-                return if ended or paused
-                ended = true
-                stream.writable = stream.readable = false
-                stream.emit 'end'
-                stream.emit 'close'
-
-            stream.destroy = ->
-                return if ended
-                ended = true
-                stream.readable = stream.writable = false
-                stream.emit 'end'
-                stream.emit 'close'
-
-            stream.on 'data', (commit) =>
-                stream.emit 'commit', commit
-                @emit "#{cfg.id}.commit", commit
-
-            stream
+            return stream
 
         Storage::read = (filter, callback) ->
             reader = @createReader filter,

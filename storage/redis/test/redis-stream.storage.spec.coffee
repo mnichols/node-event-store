@@ -7,7 +7,7 @@ describe 'redis-stream storage', ->
     beforeEach (done) ->
         (cli = new Redis 6379, 'localhost', 11)
         cfg =
-            id: 'myhairystorage'
+            id: 'my-app-storage'
             client: cli
         done()
 
@@ -22,7 +22,7 @@ describe 'redis-stream storage', ->
             sut = redisStorage
             storage = sut.createStorage cfg
             storage.on 'storage.ready', (storage) -> 
-                storage.id.should.equal 'myhairystorage'
+                storage.id.should.equal 'my-app-storage'
                 done()
 
 
