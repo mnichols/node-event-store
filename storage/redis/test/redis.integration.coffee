@@ -14,10 +14,9 @@ describe 'redis-integration', ->
 
     afterEach (done) ->
         flusher = cli.stream()
+        flusher.pipe es.through (reply) ->
+            done()
         flusher.write 'flushdb'
-
-        flusher.end()
-        done()
 
     createAggregate = ->
         Aggregate = ->
@@ -112,11 +111,11 @@ describe 'redis-integration', ->
 
                 stream = storage.open filter
                 aggregate = createAggregate()
-                assertion = es.through (commit) ->
-                    console.log 'assertion', commit
+                assertion = es.through (commit) =>
                     expect = 
                         streamId : '123'
                         streamRevision:1 + @commit1.streamRevision
+
                     verify = es.through (data) =>
                         console.log 'verifying', data
                         data.streamId.should.equal expect.streamId
@@ -164,7 +163,6 @@ describe 'redis-integration', ->
                 stream.on 'end', ->
                     pending = es.readArray [{d:4}]
                     assertion = es.through (commit) ->
-                        console.log commit
                         done()
                     pending.pipe(stream.commit).pipe(assertion)
                 stream.pipe(aggregate)
