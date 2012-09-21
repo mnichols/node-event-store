@@ -41,7 +41,7 @@ describe 'event-store', ->
 
 
     
-    describe.skip '#commit', ->
+    describe '#commit', ->
         beforeEach ->
             storage.mount 
                 'commits:123': [
@@ -50,7 +50,7 @@ describe 'event-store', ->
                         {a:1}
                     ]
                 ]
-        it 'should commit events', (done) ->
+        it 'should pipe committed events', (done) ->
             sut = store storage
             filter = 
                 minRevision: 0
@@ -59,16 +59,15 @@ describe 'event-store', ->
             received = []
             stream = sut.open filter
 
-            agg = Aggregate()
-            stream.pipe(agg.in)
-            stream.on 'end', =>
-                commit = stream.commit
 
-                ck = es.map (commit, next) ->
-                    commit.should.exist
+            aggStream = createAggregate()
+            pending = es.map (agg, next) ->
+                agg.events.should.eql [{a:1}]
+                next null, [{d:4}]
+            stream.pipe(aggStream)
+                .pipe(pending)
+                .pipe(stream.commit)
+                .pipe es.through (commit) ->
                     commit.streamRevision.should.equal 2
-                    done()
-                agg.out.pipe(stream.commit).pipe ck
-                agg.out.write {b:1}
-            stream.read()
+                    commit.payload.should.eql [ {d:4} ]
 
