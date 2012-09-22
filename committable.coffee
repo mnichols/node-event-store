@@ -1,7 +1,8 @@
 es = require 'event-stream'
 CommitStream = require './commit-stream'
 
-createCommit = (cfg) ->
+createCommit = ->
+    cfg = @
     now = new Date()
 
     utc = Date.UTC now.getFullYear(), 
@@ -19,13 +20,13 @@ createCommit = (cfg) ->
     payload: cfg.events
 
     
-module.exports = (cfg, storage) ->
-    unless cfg.streamId
+module.exports = (source, storage) ->
+    source.createCommit = ->
+        unless source.committable
+            throw new Error 'source is not committable'
+        createCommit.apply source, []
+    unless source.streamId
         throw new Error 'streamId is required'
-    cfg =
-        streamRevision: cfg.streamRevision
-        streamId: cfg.streamId
-    commit = createCommit(cfg)
-    streamable = new CommitStream commit
+    streamable = new CommitStream source
     streamable.pipe(storage.commitStream())
     streamable

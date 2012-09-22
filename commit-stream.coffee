@@ -1,19 +1,25 @@
 {Stream} = require 'stream'
 util = require 'util'
 
-module.exports = (commit) ->
-    unless commit
-        throw new Error('commit is required')
-    unless commit.streamId? and commit.streamRevision?
-        throw new Error('commit must have streamId and streamRevision')
-    commit.payload = commit.payload ? []
+module.exports = (sourceStream) ->
+    commit = null
+    source = sourceStream
     stream = new Stream()
+    promiseCommit = ->
+        return if commit
+        commit = source.createCommit()
+        unless commit
+            throw new Error('commit is required')
+        unless commit.streamId? and commit.streamRevision?
+            throw new Error('commit must have streamId and streamRevision')
+        commit.payload = commit.payload ? []
     stream.writable = true
     stream.readable = true
     ended = false
     destroyed = false
     paused = false
     stream.write = (data) ->
+        promiseCommit()
         if ended or destroyed
             throw new Error 'commit-stream no longer writable'
         return true unless data

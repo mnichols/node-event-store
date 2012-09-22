@@ -126,7 +126,7 @@ describe 'redis-integration', ->
 
                 stream.on 'end', ->
                     pending = es.readArray [{d:4}]
-                    pending.pipe(stream.commit).pipe(assertion)
+                    pending.pipe(stream.commit()).pipe(assertion)
 
                 stream.pipe(aggregate)
         describe '#pipe from aggregate', ->
@@ -163,7 +163,7 @@ describe 'redis-integration', ->
                     pending = es.readArray [{d:4}]
                     assertion = es.through (commit) ->
                         done()
-                    pending.pipe(stream.commit).pipe(assertion)
+                    pending.pipe(stream.commit()).pipe(assertion)
                 stream.pipe(aggregate)
 
 

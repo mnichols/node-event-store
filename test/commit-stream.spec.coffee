@@ -2,11 +2,13 @@ es = require 'event-stream'
 describe 'commit-stream', ->
     CommitStream = require '../commit-stream'
     commit = ->
-        streamId: '123'
-        streamRevision: 2
-        timestamp: Date.UTC 2012, 9,8,7,0,0,0
-        checkRevision: 2
-        headers: []
+        createCommit: ->
+            streamId: '123'
+            streamRevision: 2
+            timestamp: Date.UTC 2012, 9,8,7,0,0,0
+            checkRevision: 2
+            headers: []
+            committable: true
 
     it 'should buffer events received until end', (done) ->
         stream = new CommitStream commit()

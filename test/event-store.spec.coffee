@@ -63,11 +63,12 @@ describe 'event-store', ->
             aggStream = createAggregate()
             pending = es.map (agg, next) ->
                 agg.events.should.eql [{a:1}]
-                next null, [{d:4}]
+                next null, {d:4}
             stream.pipe(aggStream)
                 .pipe(pending)
-                .pipe(stream.commit)
+                .pipe(stream.commit())
                 .pipe es.through (commit) ->
                     commit.streamRevision.should.equal 2
                     commit.payload.should.eql [ {d:4} ]
+                    done()
 
