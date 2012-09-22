@@ -23,7 +23,7 @@ createCommit = ->
 module.exports = (source, storage) ->
     source.createCommit = ->
         unless source.committable
-            throw new Error 'source is not committable'
+            throw new Error 'source is not committable. this is likely due to not having been read from storage.'
         createCommit.apply source, []
     unless source.streamId
         throw new Error 'streamId is required'
