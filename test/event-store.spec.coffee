@@ -50,6 +50,30 @@ describe 'event-store', ->
                         {a:1}
                     ]
                 ]
+        it 'should support headers', (done) ->
+            sut = store storage
+            filter = 
+                minRevision: 0
+                maxRevision: Number.MAX_VALUE
+                streamId: '123'
+            received = []
+            stream = sut.open filter
+
+
+            aggStream = createAggregate()
+            pending = es.map (agg, next) ->
+                agg.events.should.eql [{a:1}]
+                next null, {d:4}
+            headers = [
+                {correlationId: '1234'}
+                {userName: 'me'}
+            ]
+            stream.pipe(aggStream)
+                .pipe(pending)
+                .pipe(stream.commit({headers: headers}))
+                .pipe es.through (commit) ->
+                    commit.headers.should.eql headers
+                    done()
         it 'should pipe committed events', (done) ->
             sut = store storage
             filter = 
