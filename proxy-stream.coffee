@@ -26,11 +26,13 @@ module.exports = ->
                     proxy.emit 'data', d
 
     proxy.enable = (target) ->
+        console.log 'enable'
         return if proxied
         proxied = target
 
     proxy.write = (data) -> buffer.push data
     proxy.end = -> 
+        console.log 'proxyend'
         return if ended
         ended = true
         drain proxied if drain
