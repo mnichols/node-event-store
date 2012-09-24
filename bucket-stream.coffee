@@ -1,4 +1,10 @@
 {Stream} = require 'stream'
+# this just aggregates all data
+# and then passes the whole bit along
+# on 'end'
+# This obviously would be silly for a huge number
+# of events, and breaks the purpose of Streaming
+# but is handy for demo to simplify piping
 module.exports = (buffer = []) ->
     stream = new Stream()
     stream.writable = true
