@@ -48,6 +48,25 @@ describe 'redis-stream storage', ->
                         reader.streamRevision.should.equal 0
                         done()
                     reader.pipe(ck)
+            it 'should support stream header', (done) ->
+                @timeout(100)
+                sut = redisStorage
+                ck = es.through (header) ->
+                    header.should.eql
+                        streamId: '123'
+                        minRevision: 0
+                        maxRevision: Number.MAX_VALUE
+                        commitCount: 0
+                        streamRevision: 0
+                    done()
+                sut.createStorage cfg, (err, storage) =>
+                    filter = 
+                        streamId: '123'
+                        minRevision: 0       
+                        maxRevision: Number.MAX_VALUE
+                    reader= storage.createReader filter, {emitStreamHeader: true}
+                    tick=0
+                    reader.pipe(ck)
         describe 'given at least one commit', ->
         
             beforeEach (done) ->

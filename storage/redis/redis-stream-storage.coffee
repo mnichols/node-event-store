@@ -29,10 +29,23 @@ module.exports =
             process.nextTick => @emit 'storage.ready', @
 
         util.inherits Storage, EventEmitter2
+        ###
+        * reader implementation for Redis
+        * this streams events out of Redis storage
+        * @params {Object} filter
+        *     @params {String} streamId The id (typically of aggregate root) of the stream
+        *     @params {Number} [minRevision=0] The stream revision to start at
+        *     @params {Number} [maxRevision=Number.MAX_VALUE] The stream revision to end with
+        * @params {Object} [opts]
+        *     @params {Boolean} [enrich=false] Whether to add details of the commit onto each event
+        *     @params {Boolean} [flatten=true] Whether to emit events in groups by commit, or singly
+        *     @params {Boolean} [emitStreamHeader=false] Whether to emit a single 'data' event before streaming committed event data
+        ###
         Storage::createReader = (filter, opts = {}) ->
             defaultOpts = 
                 enrich:false
                 flatten: true
+                emitStreamHeader: false
             (opts[k]=defaultOpts[k]) for k,v of defaultOpts when !opts[k]
             id = cfg.getCommitsKey(filter.streamId)
             args = (cmd) -> 
@@ -105,16 +118,24 @@ module.exports =
                 rangeStream.pipe(es.parse()).pipe(payload).pipe(each)
                 rangeStream.write args('zrangebyscore')
 
+            _noCommits = (countStream) ->
+                console.log @id,
+                    "new stream detected for stream '#{filter.streamId}'"
+                if opts.emitStreamHeader
+                    header = {}
+                    (header[k] = filter[k]) for k,v of filter
+                    header.commitCount = 0
+                    header.streamRevision = 0
+                    stream.emit 'data', header
+
+                countStream.end()
+                return stream.end()
 
             _begin = =>
                 countStream = cfg.client.stream()
                 countStream.on 'data', (data) =>
                     commitCount = Number(data)
-                    if commitCount==0
-                        console.log @id,
-                            "new stream detected for stream '#{filter.streamId}'"
-                        countStream.end()
-                        return stream.end()
+                    return _noCommits(countStream) if commitCount == 0
                     _read(commitCount)
                 countStream.write args('zcount')
 
