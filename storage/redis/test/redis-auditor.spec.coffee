@@ -1,14 +1,16 @@
 describe 'redis-auditor', ->
     cli = null
     cfg = null
-    Redis = require 'redis-stream'
     auditApi = require '../redis-auditor'
+    redisStorage = require '../redis-stream-storage'
 
     beforeEach (done) ->
-        (cli = new Redis 6379, 'localhost', 11)
+        cli = redisStorage.createClient {db: 11}
+        eventStorage = redisStorage.createStorage
+            client: redisStorage.createClient {db: 11}
         cfg =
-            id: 'myhairystorage'
-            client: cli
+            client: redisStorage.createClient {db: 11}
+            eventStorage: eventStorage
         done()
 
     afterEach (done) ->
@@ -126,6 +128,7 @@ describe 'redis-auditor', ->
                 stream = @auditor.createEventStream()
                 vals = []
                 stream.on 'data', (data) ->
+                    console.log 'datareceived', data
                     vals.push data
                 stream.on 'end', =>
                     vals.length.should.equal 9
@@ -139,7 +142,7 @@ describe 'redis-auditor', ->
                     vals[7].should.eql @commit4.payload[1]
                     vals[8].should.eql @commit4.payload[2]
                     done()
-                stream.write [start, end]
+                stream.read [start, end]
 
 
 

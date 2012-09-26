@@ -2,21 +2,24 @@ describe 'redis-integration', ->
     cli = null
     cfg = null
     eventStore = require '../../../event-store'
-    Redis = require 'redis-stream'
     redis = require '..'
     es = require 'event-stream'
 
     beforeEach (done) ->
-        (cli = new Redis 6379, 'localhost', 11)
+        cli = redis.createClient({db:11})
+        eventStorage = redis.createStorage
+            client: redis.createClient({db:11})
         cfg =
-            client: cli
+            client: redis.createClient({db:11})
+            eventStorage: eventStorage
         done()
 
     afterEach (done) ->
         flusher = cli.stream()
-        flusher.pipe es.through (reply) ->
+        flusher.on 'end', ->
             done()
         flusher.write 'flushdb'
+        flusher.end()
 
     createAggregate = ->
         Aggregate = ->
@@ -28,7 +31,7 @@ describe 'redis-integration', ->
     describe 'redis-auditor', ->
         describe '#throughput', ->
             ts = new Date().getTime()
-            numberOfCommits = 100000
+            numberOfCommits = 1500
             beforeEach (done) ->
                 @timeout(0)
                 @auditor = redis.createAuditor cfg
@@ -66,6 +69,7 @@ describe 'redis-integration', ->
                 @timeout(20000)
                 stream = @auditor.createEventStream()
                 tick = 0
+                stream.on 'error', (err) -> done err
                 stream.on 'data', (data) ->
                     data.a.should.equal 1 if data.a
                     data.b.should.equal 2 if data.b
@@ -76,7 +80,7 @@ describe 'redis-integration', ->
                     tick.should.equal (numberOfCommits*3)
                     done()
 
-                stream.write()
+                stream.read()
 
     describe 'event-store', ->
         describe '#auditable-pipe from aggregate', ->

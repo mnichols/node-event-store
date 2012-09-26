@@ -1,14 +1,13 @@
 redisStorage = require '../redis-stream-storage'
 cli = null
 cfg = null
-Redis = require 'redis-stream'
 es = require 'event-stream'
 describe 'redis-stream storage', ->
     beforeEach (done) ->
-        (cli = new Redis 6379, 'localhost', 11)
+        cli = redisStorage.createClient {db:11}
         cfg =
             id: 'my-app-storage'
-            client: cli
+            client: redisStorage.createClient {db: 11}
         done()
 
     afterEach (done) ->
@@ -57,7 +56,6 @@ describe 'redis-stream storage', ->
                         minRevision: 0
                         maxRevision: Number.MAX_VALUE
                         commitCount: 0
-                        streamRevision: 0
                     done()
                 sut.createStorage cfg, (err, storage) =>
                     filter = 
@@ -88,7 +86,7 @@ describe 'redis-stream storage', ->
                 seed.write JSON.stringify(@commit1)
                 seed.end()
             it 'should read all events', (done) ->
-                @timeout(100)
+                @timeout(1000)
                 sut = redisStorage
                 sut.createStorage cfg, (err, storage) =>
                     filter = 

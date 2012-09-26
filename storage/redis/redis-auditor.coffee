@@ -57,50 +57,59 @@ module.exports =
             auditStream
 
         Auditor::createEventStream = ->
-            commitCount = 0
             #default args...everything
             writeArgs = [0, new Date(2999, 12,31).getTime()]
+            commitCount = 0
+            inputs = 0
+
             countStream = cfg.client.stream 'zcount', @auditKey
             countercept = es.map (data, next) ->
-                    commitCount = Number(data)
-                    console.log 'redis-auditor',"streaming #{commitCount} commits"
-                    next null, writeArgs
-            auditStream = @createRangeStream()
-            commitStream = cfg.client.stream()
-            eachEvent = (require './each-event-stream')()
-            eachEvent.on 'tick', (inputs) ->
-                if inputs >= commitCount
-                    countStream.end()
+                commitCount = Number(data)
+                console.log 'redis-auditor',"streaming #{commitCount} commits"
+                next null, writeArgs
 
-            xform = es.map (data, next) =>
-                args = [
-                    'zrangebyscore'
-                    cfg.getCommitsKey(data.streamId)
-                    data.streamRevision
-                    data.streamRevision
-                ]
-                next null, args
-            payload = es.map (data, next) =>
-                return next() unless data.payload
-                next null, data.payload
 
-            pipe = es.pipeline(
+            reader = cfg.eventStorage.createReader()
+
+            nextCommit = ->
+            oneCommitAtATime = es.map (auditEntry, next) =>
+                unless auditEntry.streamId and auditEntry.streamRevision
+                    throw new Error 'invalid audit entry'
+                
+                filter = 
+                    streamId: auditEntry.streamId
+                    minRevision: Number(auditEntry.streamRevision)
+                    maxRevision: Number(auditEntry.streamRevision)
+                readerOpts =
+                    enrich: false
+                    flatten: true
+                    emitStreamHeader: false
+                reader.read filter,readerOpts, -> next()
+
+            stream = es.pipeline(
                 countStream,
                 countercept,
-                auditStream,
+                @createRangeStream(),
                 es.parse(),
-                xform,
-                commitStream,
-                es.parse(),
-                payload,
-                eachEvent
-            )
-            originalWrite = pipe.write
-            pipe.write = ->
+                oneCommitAtATime)
+            reader.on 'error', (err) -> stream.emit 'error', err
+            reader.on 'data', ->
+                args = Array::slice.call arguments
+                args.unshift 'data'
+                stream.emit.apply stream, args
+            reader.on 'done', (count) ->
+                inputs++
+                if inputs>=commitCount
+                    reader.destroy()
+                    return stream.emit 'end'
+
+
+            stream.read = ->
                 args = Array::slice.call arguments
                 writeArgs = args[0] if args.length > 0
-                originalWrite writeArgs
-            pipe
+                stream.write writeArgs
+
+            stream
 
         new Auditor cfg
             
