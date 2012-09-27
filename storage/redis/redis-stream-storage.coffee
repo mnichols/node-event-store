@@ -88,9 +88,8 @@ module.exports =
                 arr.unshift cmd
                 arr
 
-            rangeStream = null
-            stream.on 'done', ->
-                process.nextTick rangeStream.end if rangeStream
+            rangeStream = cfg.client.stream()
+            countStream = cfg.client.stream()
             stream.read = (filter, opts, done = ->) ->
                 stream.streamRevision = 0
                 defaultOpts = 
@@ -142,7 +141,6 @@ module.exports =
                     header.commitCount = commitCount
                     stream.emit 'data', header
                 _read = (commitCount, filter, opts) ->
-                    rangeStream = cfg.client.stream()
                     #console.log @id,"streaming #{commitCount} commits"
                     tryFlush = flusher commitCount, filter, opts
 
@@ -158,7 +156,6 @@ module.exports =
                     return stream.end()
 
                 _begin = (filter, opts) ->
-                    countStream = cfg.client.stream()
                     countCommits = (data) =>
                         commitCount = Number(data)
                         _emitHeader commitCount, filter, opts

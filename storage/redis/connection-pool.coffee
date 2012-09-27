@@ -7,14 +7,14 @@ module.exports = (cfg) ->
         create: (cb) ->
             try
                 conn = net.createConnection cfg.port, cfg.host
-                cb null, conn
+                return cb null, conn
             catch err
                 cb err
         destroy: (conn) ->
             conn.end()
         max: 15
-        min: 2
-        idleTimeoutMillis: 30000
+        min: 1
+        idleTimeoutMillis: 1000
         log: false
 
 

@@ -33,7 +33,26 @@ Redis.prototype.stream = function (cmd, key, curry /* moar? */) {
   var curry = Array.prototype.slice.call(arguments)
     , clip = 1
     , client = this
-    , stream
+    , stream = es.through(function (args) {
+        //accept arrays as data for `write`
+        var elems = concat([], stream.curry)
+        elems = concat(elems, args)
+        var parsed = Redis.parse(elems)
+        client.pool.acquire(function (err, conn) {
+            stream.selectDb(conn)
+            conn.pipe(interpret).pipe(behalf(stream))
+            conn.write(parsed)
+        })
+        
+
+    })
+  var behalf = function (main) {
+    return es.through(function (reply) {
+        main.emit('data', reply)
+    })
+  }
+
+  
 
   var xform = new Stream() 
   xform.writable = true
@@ -50,7 +69,6 @@ Redis.prototype.stream = function (cmd, key, curry /* moar? */) {
             stream.db = null
         })
         conn.on('data', function (raw) {
-            console.log('raw',raw.toString())
             xform.emit('data', raw)
         })
         conn.write(parsed)
