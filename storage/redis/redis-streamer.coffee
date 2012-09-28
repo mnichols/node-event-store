@@ -39,7 +39,6 @@ Redis::stream = (cmd, key, curry) ->
             releaseBackToPool = -> 
                 client.pool.release(conn)
                 stream.db = null
-                conn.removeAllListeners()
                 stream.resume()
 
         
