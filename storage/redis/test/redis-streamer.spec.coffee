@@ -11,20 +11,39 @@ describe 'redis-streamer', ->
             stream.pipe(ck)
             stream.write 'flushdb'
 
-    describe 'load', ->
+    describe.skip 'load', ->
 
-        it 'should be ok', (done) ->
-            process.env.NODE_DEBUG=true
+        it 'manystreams', (done) ->
             @timeout 0
             client = new Redis {db: 11}
-            range = [0...1500]
+            range = [0...1000]
+            ticks = 0
+            for i in range
+                stream = client.stream()
+                ck = es.through (reply) ->
+                    ticks++
+                    console.log 'ckreply', "#{ticks} #{reply}"
+                stream.on 'done', ->
+                    ticks.should.equal range.length
+                    console.log 'ticked', ticks
+                    done() if ticks==range.length
+                stream.on 'error', (err) ->
+                    console.error 'ticks', ticks
+                    done err
+                pump = es.readable (ct, cb) ->
+                    if ct > 0 
+                        pump.emit 'end'
+                    cb null, ['set', 'testload', range[i]]
+                pump.pipe(stream).pipe(ck)
+        it 'should be ok', (done) ->
+            @timeout 0
+            client = new Redis {db: 11}
+            range = [0...100000]
             ticks = 0
             stream = client.stream()
             ck = es.through (reply) ->
-                console.log 'ckreply', ticks
-                if ++ticks==range.length
-                    console.log 'ticked', ticks
-                    done()
+                ticks++
+                console.log 'ckreply', "#{ticks} #{reply}"
             pumper = es.readable (ct, cb) ->
                 return pumper.emit 'end' if ct==range.length
                 console.log 'ct', ct
@@ -32,6 +51,10 @@ describe 'redis-streamer', ->
             stream.on 'error', (err) ->
                 console.error 'ticks', ticks
                 done err
+            pumper.on 'end', -> 
+                ticks.should.equal range.length
+                console.log 'ticked', ticks
+                done()
             pumper.pipe(stream).pipe(ck)
 
 
@@ -63,7 +86,7 @@ describe 'redis-streamer', ->
             ck = es.through (reply) ->
                 tick++
                 Number(reply).should.equal 1
-                done() if tick==values.length
+                done() if tick==values.length-1
             stream = client.stream('zadd', setName)
             stream.pipe(ck)
             values.forEach (val, i) ->
@@ -112,7 +135,7 @@ describe 'redis-streamer', ->
             ticks = 0 
             ck = es.through (reply) ->
                 Number(reply).should.equal 1
-                done() if ++ticks==values.length
+                done() if ++ticks==values.length-1
 
             stream = client.stream('zrem', setName)
             stream.pipe(ck)

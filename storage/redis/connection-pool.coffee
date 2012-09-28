@@ -2,7 +2,7 @@ net = require 'net'
 poolMod = require 'generic-pool'
 
 module.exports = (cfg) ->
-    poolMod.Pool
+    pool = poolMod.Pool
         name: 'redis'
         create: (cb) ->
             try
@@ -12,10 +12,12 @@ module.exports = (cfg) ->
                 cb err
         destroy: (conn) ->
             conn.end()
-        max: 15
-        min: 1
-        idleTimeoutMillis: 1000
+        max: cfg.maxConnections
+        min: 4
+        idleTimeoutMillis: 30000
         log: false
 
+    pool.createConnection = ->
+    pool
 
 

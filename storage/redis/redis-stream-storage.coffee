@@ -17,8 +17,8 @@ module.exports =
             host: 'localhost'
             db: 0
         (cfg[k]=defaultClient[k]) for k,v of defaultClient when !cfg[k]
-        Redis = require './redis-stream'
-        return new Redis(cfg.port, cfg.host, cfg.db)
+        {Redis} = require './redis-streamer'
+        return new Redis cfg
     createStorage: (cfg = defaultCfg, cb) ->
         (cfg[k]=defaultCfg[k]) for k,v of defaultCfg when !cfg[k]
         client = cfg.client
