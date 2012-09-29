@@ -26,26 +26,26 @@ concat = (target, data) ->
 
 Redis::createConnection = ->
     net.createConnection @port, @host
-Redis::stream = (cmd, key, curry) ->
-    curry = Array::slice.call arguments
-    client = @
-    passes = -1
-    conn = @createConnection()
-    selectCmd = parseCommand(['select', client.db])
-    stream = null
-    xform = es.map (args, next) ->
-        passes = -1
+Redis::formatCommand = (curry=[], before = '') ->
+    (args = [], cb) ->
         #accept arrays as data for `write`
-        elems = concat [], stream.curry
+        elems = concat [], curry
         elems = concat elems, args
         parsed = parseCommand elems
         #select db
-        parsed = selectCmd + parsed
-        next null, parsed
-
+        parsed = before + parsed
+        cb null, parsed
     
+Redis::stream = (cmd, key, curry) ->
+    stream = null
+    curry = Array::slice.call arguments
+    passes = -1
+    conn = @createConnection()
+    select = parseCommand(['select', @db])
+    xform = es.map @formatCommand curry, select
     pluckSelect = 
         es.map (reply, next) ->
+            #clips first reply which is the select db cmd
             passes++
             return next() unless passes
             next null, reply
@@ -55,27 +55,12 @@ Redis::stream = (cmd, key, curry) ->
         pluckSelect)
 
     command = es.pipeline xform, execute
-#    execute = es.map (cmd, next) ->
-#        client.pool.acquire (err, conn) ->
-#            return next err if err?
-#            conn.removeAllListeners()
-#            conn.addListener 'error', stream.error
-#            cmd = selectCmd +  cmd
-#            passes = -1
-#            thru = es.through (reply) ->
-#                passes++
-#                return unless passes
-#                selected= true
-#                next null, reply
-#            conn.pipe(es.split('\r\n')).pipe(thru)
-#            conn.write cmd
 
     reply = replyParser -> 
-        passes = -1
         stream.emit 'done'
+        passes = -1
     stream =
-        es.pipeline(es.pipeline(xform, execute), reply)
-    stream.curry = curry
+        es.pipeline(command, reply)
     stream.error = (err) ->
         console.error 'redis-streamer', err
         stream.emit 'error', err
