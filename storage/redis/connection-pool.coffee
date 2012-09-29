@@ -13,7 +13,6 @@ module.exports = (cfg) ->
         destroy: (conn) ->
             conn.end()
         max: cfg.maxConnections
-        min: 4
         idleTimeoutMillis: 30000
         log: false
 
