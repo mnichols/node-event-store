@@ -11,10 +11,10 @@ describe 'redis-streamer', ->
             stream.pipe(ck)
             stream.write 'flushdb'
 
-    describe 'load', ->
+    describe 'load many streams', ->
 
-        it 'manystreams', (done) ->
-            @timeout 0
+        it 'should be ok', (done) ->
+            @timeout 20000
             client = new Redis {db: 11}
             range = [0...1000]
             ticks = 1
