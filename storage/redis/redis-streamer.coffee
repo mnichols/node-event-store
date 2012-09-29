@@ -29,24 +29,32 @@ Redis::createConnection = ->
 Redis::stream = (cmd, key, curry) ->
     curry = Array::slice.call arguments
     client = @
+    passes = -1
+    conn = @createConnection()
     selectCmd = parseCommand(['select', client.db])
+    stream = null
     xform = es.map (args, next) ->
+        passes = -1
         #accept arrays as data for `write`
         elems = concat [], stream.curry
         elems = concat elems, args
         parsed = parseCommand elems
+        #select db
+        parsed = selectCmd + parsed
         next null, parsed
 
     
-    conn = net.createConnection 6379, '127.0.0.1'
-    pluckSelect = ->
-        passes = -1
+    pluckSelect = 
         es.map (reply, next) ->
             passes++
             return next() unless passes
             next null, reply
-    execute = es.pipeline(conn, es.split('\r\n'))
-    execute.pipe(pluckSelect())
+
+    execute = es.pipeline(es.pipeline(conn, 
+        es.split('\r\n')),
+        pluckSelect)
+
+    command = es.pipeline xform, execute
 #    execute = es.map (cmd, next) ->
 #        client.pool.acquire (err, conn) ->
 #            return next err if err?
@@ -63,15 +71,15 @@ Redis::stream = (cmd, key, curry) ->
 #            conn.write cmd
 
     reply = replyParser -> 
+        passes = -1
         stream.emit 'done'
+    stream =
+        es.pipeline(es.pipeline(xform, execute), reply)
     stream.curry = curry
     stream.error = (err) ->
         console.error 'redis-streamer', err
         stream.emit 'error', err
 
-    pipe =
-        es.pipeline(es.pipeline(stream, execute), reply)
-
-    pipe
+    stream
 
 
