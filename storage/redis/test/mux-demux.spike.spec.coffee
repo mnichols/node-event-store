@@ -1,7 +1,6 @@
 es = require 'event-stream'
 net = require 'net'
 MuxDemux = require 'mux-demux'
-Redis = require '../redis-stream'
 describe 'muxer', ->
 
     describe 'reader', ->
@@ -88,36 +87,27 @@ describe 'muxer', ->
             main.pipe(ck)
             main.write ['select', 11]
         it 'should support tcp', (done) ->
-            mdm1 = MuxDemux()
-            mainData = [0..2]
-            parsed = Redis.parse ['select', 11]
-            ds = mdm1.createWriteStream 'reply'
-            main = es.through (data) ->
-                console.log 'maindata', data
-            interpret = es.through (data) ->
-                console.log 'data interpret', data
-                ds.write data.toString()
-            thru = es.through (data) ->
-                conn.write parsed
-            conn.pipe(interpret).pipe(mdm1).pipe(main)
-            conn.write(parsed)
+            parseCommand = require '../redis-command-parser'
+            reply = es.through (reply) ->
+                @emit 'data', reply+''
 
-            return 
-            reader = es.readable (cnt, callback) ->
-                if cnt == mainData.length
-                    return @emit 'end'
+            stream = es.through (cmd) ->
+                console.log 'inputcmd', cmd
+                main = net.createConnection 6379, 'localhost'
+                main.pipe(reply)
+                main.write parseCommand cmd
 
-                callback null, mainData[cnt]
+            stream.pipe(reply)
+                .pipe es.through (reply) ->
+                    console.log 'reply2', reply
+                    done()
+            stream.write ['select', 11]
 
-            writer = es.through (data) ->
-                console.log "got #{data}"
-
-            dupe= es.duplex writer, reader
-            thru = es.through (data) ->
-                conn.write parsed
-
-
-            reader.on 'end', -> done()
+            #stream has
+            #1. input cmd (with xform)
+            #2. pass cmd into new connection
+            #3. new connection pass its reply into original stream
+            #4. carry on
 
 
                 

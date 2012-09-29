@@ -1,4 +1,5 @@
 es = require 'event-stream'
+net = require 'net'
 replyParser = require './redis-reply-parser'
 parseCommand = require './redis-command-parser'
 connectionPool = require './connection-pool'
@@ -23,51 +24,54 @@ concat = (target, data) ->
     Array::push.apply target, data
     target
 
+Redis::createConnection = ->
+    net.createConnection @port, @host
 Redis::stream = (cmd, key, curry) ->
     curry = Array::slice.call arguments
     client = @
     selectCmd = parseCommand(['select', client.db])
-    
-    select = ->
-        selected = false
-        es.map (reply, next) ->
-            return next null, reply+'' if selected
-            selected = true
-            next null, '~DB\r\n'
-
-    stream = es.through (args) ->
-        stream.pause()
+    xform = es.map (args, next) ->
         #accept arrays as data for `write`
         elems = concat [], stream.curry
         elems = concat elems, args
         parsed = parseCommand elems
-        client.pool.acquire (err, conn) ->
-            return stream.error err if err?
-            conn.removeAllListeners()
-            parseReply = replyParser stream, ->
-                process.nextTick ->
-                    client.pool.release conn
-                stream.emit 'done'
-                stream.resume()
-            #conn.addListener 'error', stream.error
-            replyPipe =
-                es.pipeline(es.split('\r\n'),parseReply)
+        next null, parsed
 
-            #combine commands
-            cmd = selectCmd +  parsed
-            pipe = es.pipeline conn,
-                replyPipe,
-                es.through (reply) ->
-                    stream.queue reply
-            pipe.write cmd
+    
+    conn = net.createConnection 6379, '127.0.0.1'
+    pluckSelect = ->
+        passes = -1
+        es.map (reply, next) ->
+            passes++
+            return next() unless passes
+            next null, reply
+    execute = es.pipeline(conn, es.split('\r\n'))
+    execute.pipe(pluckSelect())
+#    execute = es.map (cmd, next) ->
+#        client.pool.acquire (err, conn) ->
+#            return next err if err?
+#            conn.removeAllListeners()
+#            conn.addListener 'error', stream.error
+#            cmd = selectCmd +  cmd
+#            passes = -1
+#            thru = es.through (reply) ->
+#                passes++
+#                return unless passes
+#                selected= true
+#                next null, reply
+#            conn.pipe(es.split('\r\n')).pipe(thru)
+#            conn.write cmd
+
+    reply = replyParser -> 
+        stream.emit 'done'
     stream.curry = curry
     stream.error = (err) ->
         console.error 'redis-streamer', err
         stream.emit 'error', err
-    stream
 
+    pipe =
+        es.pipeline(es.pipeline(stream, execute), reply)
 
-
-
+    pipe
 
 

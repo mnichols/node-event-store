@@ -11,7 +11,7 @@ describe 'redis-streamer', ->
             stream.pipe(ck)
             stream.write 'flushdb'
 
-    describe 'load', ->
+    describe.skip 'load', ->
 
         it 'manystreams', (done) ->
             @timeout 0
@@ -31,6 +31,7 @@ describe 'redis-streamer', ->
                     done err
                 stream.pipe(ck)
                 stream.write  ['set', 'testload', range[i]]
+    describe 'load single stream', ->
         it 'should be ok', (done) ->
             @timeout 0
             client = new Redis {db: 11}
@@ -50,6 +51,7 @@ describe 'redis-streamer', ->
             pumper.on 'end', -> 
                 ticks.should.equal range.length
                 console.log 'ticked', ticks
+
                 done()
             pumper.pipe(stream).pipe(ck)
 

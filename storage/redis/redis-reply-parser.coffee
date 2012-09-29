@@ -1,16 +1,15 @@
 es = require 'event-stream'
 
 module.exports = (stream, cb = ->) ->
+    if 'function' == typeof stream
+        cb = stream 
+        stream = null
     done = (filter) ->
-        filter.done = (filter.replyCount==0)
+        filter.done = (filter.replyCount<=0)
         cb null
         filter.emit 'done' if filter.done
 
-    passes = -1
     filter = es.map (reply, next) ->
-        passes++
-        #first pass is DB selection
-        return unless passes
         first = reply[0]
         content = reply.slice(1)
         filter.replyCount--
@@ -25,11 +24,11 @@ module.exports = (stream, cb = ->) ->
                 done filter
                 return next new Error content
             when '*'
-                filter.replyCount = parseInt(content)
+                filter.replyCount = parseInt(content)*2
                 return next()
             when '~'
                 filter.replyCount++
-                return next null, content
+                return next()
             else
                 if filter.bulk
                     done filter
