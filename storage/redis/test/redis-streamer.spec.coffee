@@ -16,7 +16,7 @@ describe 'redis-streamer', ->
         it 'should be ok', (done) ->
             @timeout 20000
             client = new Redis {db: 11}
-            range = [0...1000]
+            range = [0...2000]
             ticks = 1
             for i in range
                 stream = client.stream()

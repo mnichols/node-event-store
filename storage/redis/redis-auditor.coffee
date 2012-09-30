@@ -1,7 +1,6 @@
 es = require 'event-stream'
 pipeline = require './pipeline'
 {Stream} = require('stream')
-Redis = require 'redis-stream'
 {EventEmitter2} = require 'eventemitter2'
 util = require 'util'
 defaultCfg = 

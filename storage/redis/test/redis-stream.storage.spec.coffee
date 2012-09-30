@@ -11,6 +11,7 @@ describe 'redis-stream storage', ->
         done()
 
     afterEach (done) ->
+        cli = redisStorage.createClient {db:11}
         flusher = cli.stream()
         flusher.pipe es.through -> done()
         flusher.write 'flushdb'

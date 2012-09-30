@@ -128,7 +128,6 @@ describe 'redis-auditor', ->
                 stream = @auditor.createEventStream()
                 vals = []
                 stream.on 'data', (data) ->
-                    console.log 'datareceived', data
                     vals.push data
                 stream.on 'end', =>
                     vals.length.should.equal 9
