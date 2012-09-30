@@ -99,4 +99,41 @@ describe 'redis-reply-parser', ->
                     .pipe(interpreter)
             @stream.write '-wrong data type'
 
+    describe 'special replies', ->
+        beforeEach ->
+            @stream = es.through (args) =>
+                conn = es.readable (ct, callback) =>
+                    return conn.emit 'end' if ct > 0
+                    callback null, args
+                @sut= parser(@stream)
+                interpreter = es.through (reply) =>
+                    @stream.emit 'data', reply
+                    @stream.emit 'done' if @sut.done
+                conn.pipe(es.split('\r\n'))
+                    .pipe(@sut)
+                    .pipe(interpreter)
+
+        it 'should emit null for non-existing bulk value', (done) ->
+            ck = es.through (reply) ->
+                expect(reply).to.be.null
+            @stream.on 'done', -> 
+                done()
+            @stream.pipe(ck)
+            @stream.write '$-1\r\n'
+        it 'should emit null for non-existing multi value', (done) ->
+            ck = es.through (reply) ->
+                expect(reply).to.be.null
+            @stream.on 'done', -> 
+                done()
+            @stream.pipe(ck)
+            @stream.write '*-1\r\n'
+        it 'should emit empty string for non-existing key', (done) ->
+            ck = es.through (reply) ->
+                reply.should.equal ''
+            @stream.on 'done', -> 
+                done()
+            @stream.pipe(ck)
+            @stream.write '*0\r\n'
+
+
             

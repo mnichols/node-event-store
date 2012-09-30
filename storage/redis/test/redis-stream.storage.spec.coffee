@@ -12,9 +12,8 @@ describe 'redis-stream storage', ->
 
     afterEach (done) ->
         flusher = cli.stream()
+        flusher.pipe es.through -> done()
         flusher.write 'flushdb'
-        flusher.end()
-        done()
 
     describe '#init', ->
         it 'should emit ready event', (done) ->
@@ -176,17 +175,19 @@ describe 'redis-stream storage', ->
         it 'should return concurrency error', (done) ->
             @timeout(100)
             sut = redisStorage
-            sut = redisStorage
             sut.createStorage cfg, (err, storage) =>
-                emitter = storage.commitStream @commit, cfg
+                emitter = storage.commitStream()
                 emitter.on 'commit', (data) =>
                     done new Error('fail')
+
+                doned=false
                 emitter.on 'error', (err) =>
                     err.should.exist
                     err.name.should.equal 'ConcurrencyError'
                     done()
                 emitter.write @commit
     describe '#write-emit', ->
+
         it 'should publish storage commit event', (done) ->
             @timeout(100)
             sut = redisStorage
@@ -208,7 +209,7 @@ describe 'redis-stream storage', ->
                 emitter.write commit
 
         it 'should pipe commit ok', (done) ->
-            @timeout(100)
+            @timeout(2000)
             sut = redisStorage
             commit =
                 checkRevision: 0
@@ -223,11 +224,8 @@ describe 'redis-stream storage', ->
                 timestamp: new Date(2012,9,1,13,0,0)
 
             sut.createStorage cfg, (err, storage) =>
-                emitter =  storage.commitStream commit, cfg
-                meh = es.readable (cnt, callback) ->
-                    if cnt > 0
-                        return meh.emit 'end'
-                    callback null, commit
+                emitter =  storage.commitStream()
+                meh = es.readArray [commit]
                 verify = es.through (data) ->
                     data.payload.should.eql commit.payload
                     done()
@@ -293,17 +291,16 @@ describe 'redis-stream storage', ->
                     emitter.on 'error', (err) ->
                         done new Error 'fail'
                     emitter.on 'commit', (data) ->
-                        actual = cli.stream 'zrangebyscore', 'commits:123', 0
-                        replies = []
-                        actual.on 'end', ->
+                        cmd = ['zrangebyscore', 'commits:123', 0, 100]
+                        actual = cli.stream()
+                        cmdStream = es.readArray [cmd]
+                        ck = es.writeArray (err, replies) ->
+                            replies = replies.map (r) -> JSON.parse r
                             replies.length.should.equal 2
                             replies[0].payload.should.eql commit1.payload
                             replies[1].payload.should.eql commit.payload
                             done()
-                        actual.on 'data', (reply) ->
-                            replies.push JSON.parse reply
-                        actual.write 100
-                        actual.end()
+                        cmdStream.pipe(actual).pipe(ck)
                     emitter.write commit
             stream.write JSON.stringify(commit1)
             stream.end()

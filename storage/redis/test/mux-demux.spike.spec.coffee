@@ -2,6 +2,20 @@ es = require 'event-stream'
 net = require 'net'
 MuxDemux = require 'mux-demux'
 describe 'muxer', ->
+    describe 'demonstrateerror', (done) ->
+        it 'should error once', ->
+            errors = 0
+            thrower = es.through (data) -> 
+                @emit 'error', new Error data
+            thru = es.through (data) -> 
+                @emit 'data', data
+            pipe = es.pipeline thru, thrower
+            pipe.on 'error', (err) ->
+                errors++
+                console.log 'error count', errors
+                done() if errors.length > 1
+            pipe.write 'meh'
+
 
     describe 'reader', ->
 

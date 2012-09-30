@@ -13,6 +13,13 @@ module.exports = (stream, cb = ->) ->
         first = reply[0]
         content = reply.slice(1)
         filter.replyCount--
+        switch reply
+            when '*0' #key doesnt exist
+                done filter
+                return next null, ''
+            when '$-1', '*-1' #value doesnt exist
+                done filter
+                return next null, null
         switch first
             when '$'
                 filter.bulk = parseInt(content)

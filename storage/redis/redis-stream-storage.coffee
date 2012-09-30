@@ -2,6 +2,7 @@ es = require 'event-stream'
 {Stream} = require 'stream'
 {EventEmitter2} = require 'eventemitter2'
 util = require 'util'
+pipeline = require './pipeline'
 
 concurrencyStream = require './concurrency-stream'
 
@@ -36,6 +37,7 @@ module.exports =
             process.nextTick => @emit 'storage.ready', @
 
         util.inherits Storage, EventEmitter2
+
 
         ###
         * reader implementation for Redis
@@ -177,9 +179,11 @@ module.exports =
             reader
 
         Storage::commitStream = ->
+            concurrency = concurrencyStream cfg
+            result = null
             xformWriteArgs = es.map (commit, next) ->
-                #no need to store this check
                 delete commit.checkRevision
+                result = commit
                 args = [
                     'zadd'
                     cfg.getCommitsKey(commit.streamId)
@@ -189,20 +193,16 @@ module.exports =
                 next null, args
 
             writer = cfg.client.stream()
-            stream = es.map (commit, next) =>
-                concurrency = concurrencyStream commit, cfg
-                _write = ->
-                _end = =>
-                    stream.emit 'commit', commit
-                    @emit "#{cfg.id}.commit", commit
-                    next null, commit
-                thru = es.through _write, _end
-                concurrency.on 'error', (err) -> 
-                    next err
-                concurrency.pipe(xformWriteArgs)
-                    .pipe(writer)
-                    .pipe(es.through(_write, _end))
 
+            stream = pipeline {rethrow:false},
+                    concurrency,
+                    xformWriteArgs,
+                    writer,
+                    es.map (reply, next) =>
+                        stream.emit 'commit', result
+                        @emit "#{cfg.id}.commit", result
+                        next null, result
+                
             return stream
 
         Storage::read = (filter, callback) ->
@@ -220,6 +220,7 @@ module.exports =
                 callback.apply @, args
             committer.on 'error', (err) =>
                 callback.apply @, arguments
+                #callback = -> #hack to prevent dupe errors
             return committer.write commit
         storage = new Storage cfg        
         cb null, storage if cb?

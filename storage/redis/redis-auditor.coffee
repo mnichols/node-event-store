@@ -1,4 +1,5 @@
 es = require 'event-stream'
+pipeline = require './pipeline'
 {Stream} = require('stream')
 Redis = require 'redis-stream'
 {EventEmitter2} = require 'eventemitter2'
@@ -86,7 +87,7 @@ module.exports =
                     emitStreamHeader: false
                 reader.read filter,readerOpts, -> next()
 
-            stream = es.pipeline(
+            stream = pipeline(
                 countStream,
                 countercept,
                 @createRangeStream(),

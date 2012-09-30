@@ -1,10 +1,10 @@
-Redis = require 'redis-stream'
+{Redis} = require '../redis-streamer'
 es = require 'event-stream'
 describe 'concurrency-stream', ->
     cli = null
     cfg = null
     beforeEach (done) ->
-        (cli = new Redis 6379, 'localhost', 11)
+        cli = new Redis {db: 11}
         cfg =
             client: cli
             getCommitsKey: (id) -> "commits:#{id}"
@@ -46,15 +46,14 @@ describe 'concurrency-stream', ->
         it 'should pipe commit', (done) ->
             @timeout(100)
             sut = require '../concurrency-stream'
-            stream = sut(@commit, cfg)
+            stream = sut(cfg)
+            input = es.readArray [@commit]
             pipedCommit = null
-            stream.on 'error', (err) ->
+            input.on 'error', (err) ->
                 done new Error 'should not have errored'
-            stream.on 'end', ->
-                pipedCommit.streamRevision.should.equal 4
+            input.pipe(stream).pipe es.through (commit) ->
+                commit.streamRevision.should.equal 4
                 done()
-            stream.pipe es.through (commit) ->
-                pipedCommit = commit
 
     describe '#pipe with old revision', ->
         beforeEach (done) ->
@@ -86,11 +85,11 @@ describe 'concurrency-stream', ->
         it 'should return concurrency error', (done) ->
             @timeout(100)
             sut = require '../concurrency-stream'
-            stream = sut(@commit, cfg)
+            stream = sut(cfg)
+            input = es.readArray [@commit]
             stream.on 'error', (err) ->
                 err.should.exist
                 err.name.should.equal 'ConcurrencyError'
                 err.message.should.equal 'Expected 0, but got 1'
                 done()
-            stream.on 'data', ->
-                done new Error 'should not have emitted data'
+            input.pipe stream
