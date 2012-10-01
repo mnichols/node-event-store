@@ -1,6 +1,5 @@
 {Stream} = require 'stream'
 es = require 'event-stream'
-pipeline = require './pipeline'
 util = require 'util'
 ConcurrencyError = (msg) ->
     Error.captureStackTrace @, @
@@ -43,7 +42,7 @@ module.exports = (opts = {}) ->
         reset()
         next null, output
 
-    stream = pipeline init,
+    stream = es.pipeline init,
         xform,
         redis, 
         validate,

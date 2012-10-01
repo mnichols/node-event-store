@@ -1,5 +1,4 @@
 es = require 'event-stream'
-pipeline = require './pipeline'
 {Stream} = require('stream')
 {EventEmitter2} = require 'eventemitter2'
 util = require 'util'
@@ -56,58 +55,58 @@ module.exports =
             auditStream = cfg.client.stream 'zrangebyscore', @auditKey
             auditStream
 
-        Auditor::createEventStream = ->
+        Auditor::createEventStream = (range) ->
+
             #default args...everything
-            writeArgs = [0, new Date(2999, 12,31).getTime()]
-            commitCount = 0
-            inputs = 0
+            defaultRange = [0, new Date(2999, 12,31).getTime()]
+            range?=defaultRange
 
-            countStream = cfg.client.stream 'zcount', @auditKey
-            countercept = es.map (data, next) ->
-                commitCount = Number(data)
-                console.log 'redis-auditor',"streaming #{commitCount} commits"
-                next null, writeArgs
+            stream = es.through =>
+                commitCount = 0
+                inputs = 0
+                writeArgs = range ? defaultRange
 
+                countStream = cfg.client.stream 'zcount', @auditKey
+                countercept = es.map (data, next) ->
+                    commitCount = Number(data)
+                    console.log 'redis-auditor',"streaming #{commitCount} commits"
+                    next null, writeArgs
 
-            reader = cfg.eventStorage.createReader()
+                audits = es.pipeline(countStream, 
+                    countercept, 
+                    @createRangeStream(), 
+                    es.parse())
 
-            nextCommit = ->
-            oneCommitAtATime = es.map (auditEntry, next) =>
-                unless auditEntry.streamId and auditEntry.streamRevision
-                    throw new Error 'invalid audit entry'
-                
-                filter = 
-                    streamId: auditEntry.streamId
-                    minRevision: Number(auditEntry.streamRevision)
-                    maxRevision: Number(auditEntry.streamRevision)
-                readerOpts =
+                reader = cfg.eventStorage.createReadable
                     enrich: false
                     flatten: true
                     emitStreamHeader: false
-                reader.read filter,readerOpts, -> next()
+                oneCommitAtATime = es.through (auditEntry) =>
+                    oneCommitAtATime.pause()
+                    unless auditEntry.streamId and auditEntry.streamRevision
+                        throw new Error 'invalid audit entry'
+                    
+                    filter = 
+                        streamId: auditEntry.streamId
+                        minRevision: Number(auditEntry.streamRevision)
+                        maxRevision: Number(auditEntry.streamRevision)
+                    reader.write filter
+                reader.on 'error', (err) -> stream.emit 'error', err
+                reader.on 'data', ->
+                    args = Array::slice.call arguments
+                    args.unshift 'data'
+                    stream.emit.apply stream, args
+                reader.on 'done', ->
+                    oneCommitAtATime.resume()
+                    inputs++
+                    if inputs>=commitCount
+                        reader.destroy()
+                        stream.end()
 
-            stream = pipeline(
-                countStream,
-                countercept,
-                @createRangeStream(),
-                es.parse(),
-                oneCommitAtATime)
-            reader.on 'error', (err) -> stream.emit 'error', err
-            reader.on 'data', ->
-                args = Array::slice.call arguments
-                args.unshift 'data'
-                stream.emit.apply stream, args
-            reader.on 'done', (count) ->
-                inputs++
-                if inputs>=commitCount
-                    reader.destroy()
-                    return stream.emit 'end'
+                pipe = es.pipeline audits, oneCommitAtATime
+                pipe.write writeArgs
 
-
-            stream.read = ->
-                args = Array::slice.call arguments
-                writeArgs = args[0] if args.length > 0
-                stream.write writeArgs
+            stream.read = stream.write
 
             stream
 

@@ -19,26 +19,26 @@ describe 'muxer', ->
 
     describe 'reader', ->
 
-        it 'poop', (done) ->
+
+        it 'p2p2', (done) ->
 
             mdm1 = MuxDemux (stream) ->
-                console.log 'stream', stream
                 stream.on 'data', (data) ->
-                    console.log 'received', data
+                    console.log stream.meta, data
+            mdm2 = MuxDemux (stream) ->
+                stream.on 'data', (data) ->
+                    console.log stream.meta, data
 
-            main = es.through (data) ->
-                console.log 'main', data
-                @emit 'data', data
-
-            mdm2 = MuxDemux()
-    
-            main.pipe(mdm2).pipe(main)
-
+            main = es.through (reply) ->
+                main.emit 'data', reply
             main.pipe(mdm1).pipe(main)
+            mdm2.pipe(main)
 
             ds1 = mdm2.createStream 'ds1'
+            ds2 = mdm2.createStream 'ds2'
 
             ds1.write 'hello'
+            ds2.write 'worls'
 
         it 'should stream', (done) ->
             #mdm1 = MuxDemux()

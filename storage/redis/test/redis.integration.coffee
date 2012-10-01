@@ -31,7 +31,7 @@ describe 'redis-integration', ->
     describe 'redis-auditor', ->
         describe '#throughput', ->
             ts = new Date().getTime()
-            numberOfCommits = 1500
+            numberOfCommits = 3000
             beforeEach (done) ->
                 @timeout(0)
                 @auditor = redis.createAuditor cfg

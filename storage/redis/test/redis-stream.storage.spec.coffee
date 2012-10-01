@@ -24,8 +24,6 @@ describe 'redis-stream storage', ->
                 storage.id.should.equal 'my-app-storage'
                 done()
 
-
-
     describe '#createReader stream', ->
         sut = null
         describe 'given no commits', ->

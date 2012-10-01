@@ -33,12 +33,13 @@ describe 'redis-streamer', ->
         it 'should be ok', (done) ->
             @timeout 0
             client = new Redis {db: 11}
-            range = [0...50000]
+            range = [0...20]
             ticks = 0
             stream = client.stream()
             ck = es.through (reply) ->
+                
                 ticks++
-                #console.log 'ckreply', "#{ticks} #{reply}"
+                console.log 'ckreply', "#{ticks} #{reply}"
             pumper = es.readable (ct, cb) ->
                 return pumper.emit 'end' if ct==range.length
                 #console.log 'ct', ct
@@ -46,14 +47,15 @@ describe 'redis-streamer', ->
             stream.on 'error', (err) ->
                 console.error 'ticks', ticks
                 done err
-            ck.on 'end', -> 
+            stream.on 'end', -> 
+                console.log 'ticked', ticks
                 #may fail on higher counts
                 #if you listen to `pumper` end
                 #b/c ticks is incremented in pipe
                 ticks.should.equal range.length
-                console.log 'ticked', ticks
 
                 done()
+
             pumper.pipe(stream).pipe(ck)
 
 

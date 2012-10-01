@@ -19,8 +19,8 @@
         ,"event-stream": "latest"
         ,"map-stream": "latest"
         ,"mux-demux": "latest"
-        ,"redis-stream": "https://github.com/mnichols/redis-stream/tarball/reply"
         ,"generic-pool": "latest"
+        ,"proxy": "latest"
     }
     ,"devDependencies" : {
         "mocha": "latest"
