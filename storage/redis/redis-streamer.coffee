@@ -156,9 +156,9 @@ Redis::stream = (cmd, key, curry) ->
     command = es.pipeline xform, execute
 
     reply = replyParser -> 
-        conn.release()
-        stream.emit 'done'
-        passes = -1
+        conn.release ->
+            stream.emit 'done'
+            passes = -1
     stream = es.pipeline command, reply
     stream.error = (err) ->
         console.error 'redis-streamer', err
