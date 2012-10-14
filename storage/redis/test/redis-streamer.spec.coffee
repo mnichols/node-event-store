@@ -11,7 +11,7 @@ describe 'redis-streamer', ->
             stream.pipe(ck)
             stream.write 'flushdb'
 
-    describe 'load many streams', ->
+    describe.skip 'load many streams', ->
 
         it 'should be ok', (done) ->
             @timeout 20000
@@ -33,17 +33,16 @@ describe 'redis-streamer', ->
         it 'should be ok', (done) ->
             @timeout 0
             client = new Redis {db: 11}
-            range = [0...21]
+            range = [0...20000]
             ticks = 0
             stream = client.stream()
             ck = es.through (reply) ->
                 
                 ticks++
-                console.log 'ckreply', "#{ticks} #{reply}"
+                #console.log 'ckreply', "#{ticks} #{reply}"
             pumper = es.readable (ct, cb) ->
                 return pumper.emit 'end' if ct==range.length
                 #console.log 'ct', ct
-                console.log 'ct', ct
                 cb null, ['set', 'testload', range[ct]]
             stream.on 'error', (err) ->
                 console.error 'ticks', ticks

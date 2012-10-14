@@ -125,11 +125,13 @@ describe 'redis-auditor', ->
             it 'should create chronological event stream given datetime range', (done) ->
                 start = new Date(2012, 9, 8, 7, 0, 0).getTime()
                 end = new Date(2012, 9, 9, 7, 0, 0).getTime()
-                stream = @auditor.createEventStream()
+                stream = @auditor.createEventStream [start, end]
                 vals = []
                 stream.on 'data', (data) ->
+                    console.log data
                     vals.push data
                 stream.on 'end', =>
+                    
                     vals.length.should.equal 9
                     vals[0].should.eql @commit2.payload[0]
                     vals[1].should.eql @commit2.payload[1]

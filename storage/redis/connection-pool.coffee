@@ -5,11 +5,12 @@ es = require 'event-stream'
 
 module.exports = (cfg) ->
     id = 0
-    pool = poolMod.Pool
+    pool = null
+    factory = 
         name: 'redis'
-        create: (cb) ->
+        create: (cb=->) ->
             try
-                conn = pool.createConnection()
+                conn = net.createConnection cfg.port, cfg.host
                 conn.id = id++
                 return cb null, conn
             catch err
@@ -18,11 +19,14 @@ module.exports = (cfg) ->
         destroy: (conn) ->
             conn.end()
         max: cfg.maxConnections
+        min: 2
         idleTimeoutMillis: 10000
         log: false
+        createConnection: ->
+            conn = net.createConnection cfg.port, cfg.host
+        numberOfConnectionsUsed: 0
+    pool = poolMod.Pool factory
 
-    pool.createConnection = ->
-        conn = net.createConnection cfg.port, cfg.host
 
     pool.createProxy = ->
 
@@ -65,19 +69,23 @@ module.exports = (cfg) ->
             destroyed = true
             ended = true
             buffer.length = 0
-            stream.writable = stream.readable = false
-            stream.emit 'close'
+            proxy.writable = proxy.readable = false
+            proxy.emit 'close'
         proxy.pause = ->
             proxy.paused = true
         proxy.resume = ->
+            _drain = proxy.paused
             proxy.paused = false
+            proxy.emit 'drain' if _drain
 
         proxy.write = (data) ->
-            proxy.pause()
             unless proxy.writer
                 throw new Error 'proxy `connect` has not been called' 
-            proxy.writer.write data
-            proxy.resume()
+            resumeable = proxy.writer.write data
+            unless resumeable
+                proxy.writer.once 'drain', ->
+                    proxy.resume()
+            resumeable
 
         proxyEvent = (event) ->
             -> 
@@ -103,8 +111,10 @@ module.exports = (cfg) ->
         proxy.connect = (cb = ->) ->
             proxy.pause()
             pool.acquire (err, conn) ->
+
+                console.error err if err?
                 return cb err if err?
-                conn.removeAllListeners()
+                conn.removeAllListeners 'pipe'
                 before = es.map (cmd, next) ->
                     proxy.busy = true
                     next null, cmd
@@ -116,74 +126,10 @@ module.exports = (cfg) ->
 
                 proxy.connection = conn
                 proxy.busy = false
-                proxy.writer = es.pipeline before,
-                    proxy.connection,
-                    after
-
+                proxy.writer = es.pipeline before, conn, 
+                    es.pipeline after
                 cb null, conn
                 proxy.resume()
         proxy
-
-
-
-#    pool.createProxy = ->
-#        ending = false
-#        drained = false
-#        _write = (cmd) -> 
-#            return proxy.connection.write(cmd) if proxy.connection
-#            @pause()
-#            proxy.connect (err) =>
-#                proxy.connection.write cmd
-#                return @resume()
-#        _end = ->
-#            console.log 'ended'
-#            ending = true
-#            return unless proxy.connection
-#            pool.release proxy.connection
-#            proxy.connection.removeAllListeners('data')
-#            #proxy.connection.removeAllListeners('end')
-#            #proxy.connection.removeAllListeners('close')
-#            proxy.connection = null
-#
-#
-#        _tryEnd = ->
-#            console.log 'draining', ending
-#            proxy.connection.end() if ending and proxy.connection
-#            ending = false
-#            drained = true
-#            proxy.connection.removeListener 'drain', _tryEnd
-#
-#        proxy = es.through _write, _end
-#
-#        emit = Stream::emit
-#        proxyEvent = (event) ->
-#            -> 
-#                args = Array::slice.call arguments
-#                args.unshift event
-#                emit.apply proxy, args
-#        proxy.release = ->
-#            return unless proxy.connection
-#            pool.release proxy.connection
-#            #proxy.connection.removeAllListeners('data')
-#            #proxy.connection.removeAllListeners('end')
-#            #proxy.connection.removeAllListeners('close')
-#            proxy.connection = null
-#            
-#        proxy.connect = (cb = ->) ->
-#            proxy.pause()
-#            ending = false
-#            drained = false
-#            pool.acquire (err, conn) ->
-#                return cb err if err?
-#                proxy.connection = conn
-#                unless conn.stamped
-#                    conn.on 'data', proxyEvent 'data'
-#                    conn.on 'drain', _tryEnd
-#            #        conn.on 'end', proxyEvent 'end'
-#            #        conn.on 'close', proxyEvent 'close'
-#                conn.stamped = true
-#                cb()
-#                proxy.resume()
-#        proxy
 
     pool

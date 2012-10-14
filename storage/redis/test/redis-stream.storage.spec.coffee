@@ -63,6 +63,122 @@ describe 'redis-stream storage', ->
                     reader= storage.createReader filter, {emitStreamHeader: true}
                     tick=0
                     reader.pipe(ck)
+        describe 'given several commits', ->
+        
+            beforeEach (done) ->
+                @timeout(100)
+                sut = redisStorage
+                @commit1 =
+                    headers: []
+                    streamId: '123'
+                    streamRevision: 1
+                    payload: [
+                        {a:1}
+                        {b:2}
+                        {c:3}
+                    ]
+                    timestamp: new Date(2012,9,1,12,0,0)
+                @commit2 =
+                    headers: []
+                    streamId: '123'
+                    streamRevision: 4
+                    payload: [
+                        {d:1}
+                        {e:2}
+                        {f:3}
+                    ]
+                    timestamp: new Date(2012,9,8,23,0,0)
+                @commit3 =
+                    headers: []
+                    streamId: '123'
+                    streamRevision: 7
+                    payload: [
+                        {g:1}
+                        {h:2}
+                        {i:3}
+                    ]
+                    timestamp: new Date(2012,9,9,3,59,0)
+                @commit4 =
+                    headers: []
+                    streamId: '123'
+                    streamRevision: 10
+                    payload: [
+                        {j:1}
+                        {k:2}
+                        {l:3}
+                    ]
+                    timestamp: new Date(2012,9,9,6,59,0)
+                @commit5 =
+                    headers: []
+                    streamId: '123'
+                    streamRevision: 13
+                    payload: [
+                        {m:1}
+                        {n:2}
+                        {o:3}
+                    ]
+                    timestamp: new Date(2012,9,10,12,0,0)
+                @commit6 =
+                    headers: []
+                    streamId: '123'
+                    streamRevision: 16
+                    payload: [
+                        {p:1}
+                        {q:2}
+                        {r:3}
+                    ]
+                    timestamp: new Date(2012,9,11,12,0,0)
+                @commit7 =
+                    headers: []
+                    streamId: '123'
+                    streamRevision: 19
+                    payload: [
+                        {s:1}
+                        {t:2}
+                        {u:3}
+                    ]
+                    timestamp: new Date(2012,9,12,12,0,0)
+                @commits = [
+                    @commit1
+                    @commit2
+                    @commit3
+                    @commit4
+                    @commit5
+                    @commit6
+                    @commit7
+                ]
+                seed = cli.stream('zadd', 'commits:123')
+                seed.on 'end', ->
+                    done()
+                for c in @commits
+                    seed.write [c.streamRevision, JSON.stringify c]
+                seed.end()
+            it 'should read all events', (done) ->
+                @timeout(1000)
+                sut = redisStorage
+                sut.createStorage cfg, (err, storage) =>
+                    filter = 
+                        streamId: '123'
+                        minRevision: 0       
+                        maxRevision: Number.MAX_VALUE
+                    reader= storage.createReader filter, 
+                        enrich: true
+                    replies = []
+                    tick=0
+                    ck = es.through (data) ->
+                        tick++
+                        replies.push data
+                    reader.on 'end', =>
+                        tick.should.equal (@commits.length * 3)
+                        reader.streamRevision.should.equal 19
+                        replies[0].streamId.should.equal '123'
+                        replies[0].a.should.equal 1
+                        replies[1].streamId.should.equal '123'
+                        replies[1].b.should.equal 2
+                        replies[2].streamId.should.equal '123'
+                        replies[2].c.should.equal 3
+                        done()
+                    reader.pipe(ck)
         describe 'given at least one commit', ->
         
             beforeEach (done) ->

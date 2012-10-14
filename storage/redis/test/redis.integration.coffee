@@ -16,10 +16,9 @@ describe 'redis-integration', ->
 
     afterEach (done) ->
         flusher = cli.stream()
-        flusher.on 'end', ->
-            done()
+        flusher.pipe es.through -> done()
+
         flusher.write 'flushdb'
-        flusher.end()
 
     createAggregate = ->
         Aggregate = ->
@@ -31,7 +30,7 @@ describe 'redis-integration', ->
     describe 'redis-auditor', ->
         describe '#throughput', ->
             ts = new Date().getTime()
-            numberOfCommits = 3000
+            numberOfCommits = 16
             beforeEach (done) ->
                 @timeout(0)
                 @auditor = redis.createAuditor cfg

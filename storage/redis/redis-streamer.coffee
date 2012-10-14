@@ -132,14 +132,8 @@ Redis::stream = (cmd, key, curry) ->
     stream = null
     curry = Array::slice.call arguments
     passes = -1
-    conn = @pool.createProxy()
+    conn = @createConnection()
     select = parseCommand(['select', @db])
-
-    init = es.map (args, next) ->
-        conn.connect (err) =>
-            console.error err if err?
-            next err if err?
-            next null, args
 
     xform = es.map @formatCommand curry, select
     pluckSelect = 
@@ -149,16 +143,15 @@ Redis::stream = (cmd, key, curry) ->
             return next() unless passes
             next null, reply
 
-    execute = es.pipeline(es.pipeline(init, conn, 
+    execute = es.pipeline(es.pipeline(conn, 
         es.split('\r\n')),
         pluckSelect)
 
     command = es.pipeline xform, execute
 
     reply = replyParser -> 
-        conn.release ->
-            stream.emit 'done'
-            passes = -1
+        stream.emit 'done'
+        passes = -1
     stream = es.pipeline command, reply
     stream.error = (err) ->
         console.error 'redis-streamer', err

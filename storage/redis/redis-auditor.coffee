@@ -82,7 +82,6 @@ module.exports =
                     flatten: true
                     emitStreamHeader: false
                 oneCommitAtATime = es.through (auditEntry) =>
-                    oneCommitAtATime.pause()
                     unless auditEntry.streamId and auditEntry.streamRevision
                         throw new Error 'invalid audit entry'
                     
@@ -90,14 +89,18 @@ module.exports =
                         streamId: auditEntry.streamId
                         minRevision: Number(auditEntry.streamRevision)
                         maxRevision: Number(auditEntry.streamRevision)
-                    reader.write filter
+                    resumable = reader.write filter
+                    if !resumable
+                        oneCommitAtATime.pause()
+
+
                 reader.on 'error', (err) -> stream.emit 'error', err
                 reader.on 'data', ->
                     args = Array::slice.call arguments
                     args.unshift 'data'
                     stream.emit.apply stream, args
                 reader.on 'done', ->
-                    oneCommitAtATime.resume()
+                    #oneCommitAtATime.resume()
                     inputs++
                     if inputs>=commitCount
                         reader.destroy()

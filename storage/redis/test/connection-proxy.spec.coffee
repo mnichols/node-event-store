@@ -1,10 +1,15 @@
 describe 'connection-proxy', ->
     sut = require '../connection-pool'
     es = require 'event-stream'
+    net = require 'net'
 
     pool = null
     beforeEach ->
-        pool = sut {port: 6379, host: 'localhost'}
+        cfg = 
+            port: 6379
+            host: 'localhost'
+            maxConnections: 10
+        pool = sut cfg
 
     afterEach (done) ->
         pool.drain ->
@@ -24,15 +29,16 @@ describe 'connection-proxy', ->
     describe 'when releasing busy connection', ->
 
         it 'should wait until proxy isnt busy to release', (done) ->
-            @timeout 10000
+            @timeout 40000
             cmd = '*3\r\n$3\r\nSET\r\n$5\r\nmykey\r\n$7\r\nmyvalue\r\n'
-            reader = es.readArray [0..200000].map -> cmd
+            reader = es.readArray [0..1000000].map -> cmd
 
             proxy = pool.createProxy()
             proxy.connect (err, conn) ->
                 reader.pipe proxy
                 reader.on 'end', ->
                     proxy.release ->
+                        console.log 'size', pool.getPoolSize()
                         proxy.busy.should.be.false
                         done()
 
