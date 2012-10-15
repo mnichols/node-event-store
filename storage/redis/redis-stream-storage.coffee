@@ -69,6 +69,8 @@ module.exports =
                 arr = [id, filter.minRevision, filter.maxRevision]
                 arr.unshift cmd
                 arr
+            countStream = cfg.client.stream()
+            rangeStream = cfg.client.stream()
             ###
             * @params {Object} filter
             *     @params {String} streamId The id (typically of aggregate root) of the stream
@@ -81,7 +83,6 @@ module.exports =
                 stream.pause()
                 stream.streamRevision = 0
                 main = @
-                countStream = cfg.client.stream()
                 countStream.pipe es.through (commitCount) ->
                     commitCount = Number(commitCount)
                     if opts.emitStreamHeader
@@ -121,7 +122,6 @@ module.exports =
                     done = es.through (events) ->
                         inputs++
                         finish inputs
-                    rangeStream = cfg.client.stream()
                     pipe = es.pipeline rangeStream,
                         es.parse(),
                         payload,
