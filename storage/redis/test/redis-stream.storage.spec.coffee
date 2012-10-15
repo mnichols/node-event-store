@@ -178,6 +178,7 @@ describe 'redis-stream storage', ->
                         replies[2].streamId.should.equal '123'
                         replies[2].c.should.equal 3
                         done()
+                    
                     reader.pipe(ck)
         describe 'given at least one commit', ->
         

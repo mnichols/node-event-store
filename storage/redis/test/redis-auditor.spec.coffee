@@ -3,6 +3,7 @@ describe 'redis-auditor', ->
     cfg = null
     auditApi = require '../redis-auditor'
     redisStorage = require '../redis-stream-storage'
+    es = require 'event-stream'
 
     beforeEach (done) ->
         cli = redisStorage.createClient {db: 11}
@@ -15,8 +16,7 @@ describe 'redis-auditor', ->
 
     afterEach (done) ->
         flusher = cli.stream()
-        flusher.on 'data', (reply) -> 
-            flusher.end()
+        flusher.pipe es.through ->
             done()
         flusher.write 'flushdb'
 
@@ -128,9 +128,10 @@ describe 'redis-auditor', ->
                 stream = @auditor.createEventStream [start, end]
                 vals = []
                 stream.on 'data', (data) ->
-                    console.log data
+                    console.log 'audit', data
                     vals.push data
                 stream.on 'end', =>
+                    console.log 'vals', vals
                     
                     vals.length.should.equal 9
                     vals[0].should.eql @commit2.payload[0]

@@ -81,7 +81,9 @@ module.exports =
                     enrich: false
                     flatten: true
                     emitStreamHeader: false
-                oneCommitAtATime = es.through (auditEntry) =>
+
+
+                createFilter = es.map (auditEntry, next) =>
                     unless auditEntry.streamId and auditEntry.streamRevision
                         throw new Error 'invalid audit entry'
                     
@@ -89,24 +91,33 @@ module.exports =
                         streamId: auditEntry.streamId
                         minRevision: Number(auditEntry.streamRevision)
                         maxRevision: Number(auditEntry.streamRevision)
-                    resumable = reader.write filter
-                    if !resumable
-                        oneCommitAtATime.pause()
 
+                    next null, filter
+
+                done = es.through ->
+                    inputs++
+                    return 
+                    if inputs>=commitCount
+                        reader.destroy()
+                        stream.end()
+
+                commits = es.pipeline(createFilter, reader)
 
                 reader.on 'error', (err) -> stream.emit 'error', err
                 reader.on 'data', ->
                     args = Array::slice.call arguments
                     args.unshift 'data'
                     stream.emit.apply stream, args
-                reader.on 'done', ->
-                    #oneCommitAtATime.resume()
-                    inputs++
-                    if inputs>=commitCount
-                        reader.destroy()
-                        stream.end()
+#                reader.on 'done', ->
+#                    oneCommitAtATime.resume()
+#                    inputs++
+#                    if inputs>=commitCount
+#                        reader.destroy()
+#                        stream.end()
 
-                pipe = es.pipeline audits, oneCommitAtATime
+                
+
+                pipe = es.pipeline audits, commits
                 pipe.write writeArgs
 
             stream.read = stream.write

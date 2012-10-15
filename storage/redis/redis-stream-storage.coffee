@@ -37,7 +37,19 @@ module.exports =
 
         util.inherits Storage, EventEmitter2
 
-
+        _createReader = (opts = {}) ->
+            defaultOpts = 
+                enrich: false
+                flatten: true
+                emitStreamHeader: false
+            (opts[k]=defaultOpts[k]) for k,v of defaultOpts when !opts[k]
+            args = (cmd, filter) -> 
+                id = cfg.getCommitsKey(filter.streamId)
+                arr = [id, filter.minRevision, filter.maxRevision]
+                arr.unshift cmd
+                arr
+            countStream = cfg.client.stream()
+            rangeStream = cfg.client.stream()
         ###
         * reader implementation for Redis
         * this streams events out of Redis storage
@@ -57,32 +69,33 @@ module.exports =
                 arr = [id, filter.minRevision, filter.maxRevision]
                 arr.unshift cmd
                 arr
-            countStream = cfg.client.stream()
-            rangeStream = cfg.client.stream()
             ###
             * @params {Object} filter
             *     @params {String} streamId The id (typically of aggregate root) of the stream
             *     @params {Number} [minRevision=0] The stream revision to start at
             *     @params {Number} [maxRevision=Number.MAX_VALUE] The stream revision to end with
             ###
-
             stream = es.through (filter) ->
                 unless filter
                     throw new Error 'filter is required'
+                stream.pause()
                 stream.streamRevision = 0
                 main = @
-                read = es.through (commitCount) ->
-                    inputs = 0
+                countStream = cfg.client.stream()
+                countStream.pipe es.through (commitCount) ->
                     commitCount = Number(commitCount)
                     if opts.emitStreamHeader
                         header = {}
                         (header[k] = filter[k]) for k,v of filter
                         header.commitCount = commitCount
                         main.emit 'data', header
+                read = es.through (commitCount) ->
+                    inputs = 0
+                    commitCount = Number(commitCount)
                     finish = (inputs) ->
                         return stream.resume() if inputs < commitCount
                         stream.emit 'done', commitCount
-                        stream.end()
+                        #stream.end()
 
                     return finish(0) if commitCount==0
                     enrich = (data) ->
@@ -108,102 +121,21 @@ module.exports =
                     done = es.through (events) ->
                         inputs++
                         finish inputs
+                    rangeStream = cfg.client.stream()
                     pipe = es.pipeline rangeStream,
                         es.parse(),
                         payload,
                         each,
                         done
-                    rangeStream.pipe pipe
-                    
                     rangeArgs = args 'zrangebyscore', filter
-                    unless pipe.write rangeArgs
-                        read.pause()
+                    pipe.write rangeArgs
 
                 countStream.pipe read
                 countArgs = args('zcount', filter)
-                unless countStream.write countArgs
-                    stream.pause()
-            
+                countStream.write countArgs
+
             stream
-        _createReaderOrigin = (opts = {}) ->
-            defaultOpts = 
-                enrich: false
-                flatten: true
-                emitStreamHeader: false
-            (opts[k]=defaultOpts[k]) for k,v of defaultOpts when !opts[k]
-            args = (cmd, filter) -> 
-                id = cfg.getCommitsKey(filter.streamId)
-                arr = [id, filter.minRevision, filter.maxRevision]
-                arr.unshift cmd
-                arr
-            countStream = cfg.client.stream()
-            rangeStream = cfg.client.stream()
-            ###
-            * @params {Object} filter
-            *     @params {String} streamId The id (typically of aggregate root) of the stream
-            *     @params {Number} [minRevision=0] The stream revision to start at
-            *     @params {Number} [maxRevision=Number.MAX_VALUE] The stream revision to end with
-            ###
-            stream = es.through (filter) ->
-                unless filter
-                    throw new Error 'filter is required'
-                stream.streamRevision = 0
-                main = @
-                read = es.through (commitCount) ->
-                    inputs = 0
-                    commitCount = Number(commitCount)
-                    if opts.emitStreamHeader
-                        header = {}
-                        (header[k] = filter[k]) for k,v of filter
-                        header.commitCount = commitCount
-                        main.emit 'data', header
-                    finish = (inputs) ->
-                        return stream.resume() if inputs < commitCount
-                        stream.emit 'done', commitCount
-                        stream.end()
 
-                    return finish(0) if commitCount==0
-                    enrich = (data) ->
-                        events = data.payload.map (e) ->
-                            (e[k]=data[k]) for k,v of data when k!='payload'
-                            e
-                        return events
-
-                    payload = es.map (data, next) =>
-                        #update the stream's revision
-                        stream.streamRevision = data.streamRevision
-                        return next null, data.payload unless opts.enrich
-                        next null, enrich(data)
-
-                    each = es.map (events, next) ->
-                        #buffer if paused
-                        if opts.flatten
-                            for e in events
-                                stream.emit 'data', e
-                        else
-                            stream.emit 'data', events    
-                        return next null, events
-                    done = es.through (events) ->
-                        inputs++
-                        finish inputs
-                    pipe = es.pipeline rangeStream,
-                        es.parse(),
-                        payload,
-                        each,
-                        done
-                    rangeStream.pipe pipe
-                    
-                    rangeArgs = args 'zrangebyscore', filter
-                    unless pipe.write rangeArgs
-                        read.pause()
-
-                countStream.pipe read
-                countArgs = args('zcount', filter)
-                unless countStream.write countArgs
-                    stream.pause()
-
-            
-            stream
         Storage::createReadable = (opts) ->
             reader = _createReader opts
             reader
