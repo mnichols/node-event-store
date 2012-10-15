@@ -56,15 +56,63 @@ module.exports =
                 arr = [id, filter.minRevision, filter.maxRevision]
                 arr.unshift cmd
                 arr
+            enrich = (data) ->
+                events = data.payload.map (e) ->
+                    (e[k]=data[k]) for k,v of data when k!='payload'
+                    e
+                return events
             countStream = cfg.client.stream()
             rangeStream = cfg.client.stream()
-            xformCount = es.map (filter, next) ->
-                next null, args('zcount', filter)
-            xformRange = es.map (filter, next) ->
-                next null, args('zrangebyscore', filter)
 
-            counter = es.pipeline xformCount, countStream
-            rangeStream = es.pipeline xformRange, rangeStream, es.parse()
+            counter = (stream, filter) ->
+                copy = {}
+                (copy[k]=filter[k]) for k,v of filter
+                xformCount = es.map (data, next) ->
+                    next null, args('zcount', copy)
+
+                record = es.map (commitCount, next) ->
+                    stream.commitCount = parseInt(commitCount)
+                    next null, parseInt(commitCount)
+                es.pipeline xformCount, countStream, record
+
+            header = (stream, filter) ->
+                copy = {}
+                (copy[k]=filter[k]) for k,v of filter
+                countStream.once 'data', (commitCount) ->
+                    commitCount = parseInt(commitCount)
+                    if opts.emitStreamHeader
+                        header = {}
+                        (header[k] = filter[k]) for k,v of copy
+                        header.commitCount = commitCount
+                        stream.emit 'data', header
+            ranger = (stream, filter) ->
+                copy = {}
+                (copy[k]=filter[k]) for k,v of filter
+                xformRange = es.map (commitCount, next) ->
+                    next null, args('zrangebyscore', copy)
+                es.pipeline xformRange, rangeStream, es.parse()
+
+            payload = (stream) ->
+                es.map (data, next) =>
+                    #update the stream's revision
+                    stream.streamRevision = data.streamRevision
+                    return next null, data.payload unless opts.enrich
+                    next null, enrich(data)
+            each = (stream) -> 
+                es.through (events) ->
+                    #buffer if paused
+                    if opts.flatten
+                        for e in events
+                            stream.emit 'data', e
+                    else
+                        stream.emit 'data', events    
+            done = (stream, cb = ->) ->
+                es.through (events) ->
+                    stream.inputs++
+                    console.log 'inputs', stream.inputs
+                    if stream.inputs>=stream.commitCount
+                        stream.emit 'done', stream.commitCount 
+                        cb null, events
 
             ###
             * @params {Object} filter
@@ -72,64 +120,34 @@ module.exports =
             *     @params {Number} [minRevision=0] The stream revision to start at
             *     @params {Number} [maxRevision=Number.MAX_VALUE] The stream revision to end with
             ###
+            inner = es.through (filter) ->
+
             stream = es.through (filter) ->
                 unless filter
                     throw new Error 'filter is required'
+                inner.queue filter
                 stream.pause()
+                inner.resume()
+                
+            inner.on 'data', (filter) ->
                 stream.streamRevision = 0
-                main = @
-                countStream.pipe es.through (commitCount) ->
-                    commitCount = Number(commitCount)
-                    if opts.emitStreamHeader
-                        header = {}
-                        (header[k] = filter[k]) for k,v of filter
-                        header.commitCount = commitCount
-                        main.emit 'data', header
-                read = es.through (commitCount) ->
-                    inputs = 0
-                    commitCount = Number(commitCount)
-                    finish = (inputs) ->
-                        return stream.resume() if inputs < commitCount
-                        stream.emit 'done', commitCount
-                        #stream.end()
+                stream.inputs = 0
+                countStream.removeAllListeners 'pipe'
+                rangeStream.removeAllListeners 'pipe'
+                header(stream, filter)
+                resume = done stream, ->
+                    stream.resume()
 
-                    return finish(0) if commitCount==0
-                    enrich = (data) ->
-                        events = data.payload.map (e) ->
-                            (e[k]=data[k]) for k,v of data when k!='payload'
-                            e
-                        return events
+                pipe = es.pipeline counter(stream, filter),
+                    ranger(stream, filter),
+                    payload(stream),
+                    each(stream),
+                    resume
+                pipe.write filter
 
-                    payload = es.map (data, next) =>
-                        #update the stream's revision
-                        stream.streamRevision = data.streamRevision
-                        return next null, data.payload unless opts.enrich
-                        next null, enrich(data)
-
-                    each = es.map (events, next) ->
-                        #buffer if paused
-                        if opts.flatten
-                            for e in events
-                                stream.emit 'data', e
-                        else
-                            stream.emit 'data', events    
-                        return next null, events
-                    done = es.through (events) ->
-                        inputs++
-                        finish inputs
-                    pipe = es.pipeline rangeStream,
-                        es.parse(),
-                        payload,
-                        each,
-                        done
-                    rangeArgs = args 'zrangebyscore', filter
-                    pipe.write rangeArgs
-
-                countStream.pipe read
-                countArgs = args('zcount', filter)
-                countStream.write countArgs
-
+            
             stream
+
 
         Storage::createReadable = (opts) ->
             reader = _createReader opts

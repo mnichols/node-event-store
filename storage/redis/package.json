@@ -18,6 +18,7 @@
         ,"eventemitter2": "latest"
         ,"event-stream": "latest"
         ,"map-stream": "latest"
+        ,"pause-stream": "latest"
         ,"mux-demux": "latest"
         ,"generic-pool": "latest"
         ,"proxy": "latest"

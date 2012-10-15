@@ -96,7 +96,6 @@ module.exports =
 
                 done = es.through ->
                     inputs++
-                    return 
                     if inputs>=commitCount
                         reader.destroy()
                         stream.end()
