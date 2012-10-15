@@ -37,19 +37,6 @@ module.exports =
 
         util.inherits Storage, EventEmitter2
 
-        _createReader = (opts = {}) ->
-            defaultOpts = 
-                enrich: false
-                flatten: true
-                emitStreamHeader: false
-            (opts[k]=defaultOpts[k]) for k,v of defaultOpts when !opts[k]
-            args = (cmd, filter) -> 
-                id = cfg.getCommitsKey(filter.streamId)
-                arr = [id, filter.minRevision, filter.maxRevision]
-                arr.unshift cmd
-                arr
-            countStream = cfg.client.stream()
-            rangeStream = cfg.client.stream()
         ###
         * reader implementation for Redis
         * this streams events out of Redis storage
@@ -71,6 +58,14 @@ module.exports =
                 arr
             countStream = cfg.client.stream()
             rangeStream = cfg.client.stream()
+            xformCount = es.map (filter, next) ->
+                next null, args('zcount', filter)
+            xformRange = es.map (filter, next) ->
+                next null, args('zrangebyscore', filter)
+
+            counter = es.pipeline xformCount, countStream
+            rangeStream = es.pipeline xformRange, rangeStream, es.parse()
+
             ###
             * @params {Object} filter
             *     @params {String} streamId The id (typically of aggregate root) of the stream
