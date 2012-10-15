@@ -2,17 +2,18 @@ es = require 'event-stream'
 net = require 'net'
 MuxDemux = require 'mux-demux'
 describe 'muxer', ->
-    describe.skip 'reader', ->
+    describe 'reader', ->
 
 
         it 'p2p2', (done) ->
 
-            mdm1 = MuxDemux (stream) ->
-                stream.on 'data', (data) ->
-                    console.log stream.meta, data
-            mdm2 = MuxDemux (stream) ->
-                stream.on 'data', (data) ->
-                    console.log stream.meta, data
+            mdm1 = MuxDemux()
+            mdm2 = MuxDemux()
+
+            mdm1.on 'connection', (s)->
+                s.on 'data', (data) ->
+                    console.log 'mdm1', data
+
 
             main = es.through (reply) ->
                 main.emit 'data', reply
@@ -21,56 +22,43 @@ describe 'muxer', ->
 
             ds1 = mdm2.createStream 'ds1'
             ds2 = mdm2.createStream 'ds2'
+            ds3 = mdm1.createStream 'ds3'
 
             ds1.write 'hello'
             ds2.write 'worls'
 
-        it 'should stream', (done) ->
-            #mdm1 = MuxDemux()
-            #raw = es.through (reply) ->
-            #    @emit 'raw data', reply
+        it 'mdmx', (done) ->
 
-            #conn = net.createConnection 6379, 'localhost'
-            #ds = mdm1.createWriteStream('reply')
-            #stream = es.through (args) ->
-            #    parsed = Redis.parse args
-            #    conn.pipe(es.split('\r\n'))
-            #        .pipe(interpret)
-            #        .pipe(mdm1)
-            #    conn.write parsed
-
-            #interpret = es.through (data) ->
-            #    console.log 'data interpret', data
-            #    ds.write data
-
-            #stream.pipe(mdm1).pipe(raw)
-            #stream.write ['select', 11]
-
-                
-                
-
-                
-
-
-
+            
             mdm1 = MuxDemux()
+
+            mdm2 = MuxDemux (stream) ->
+                stream.on 'data', (data) ->
+                    console.log 'mdm2 meta', stream.meta
+                    console.log 'mdm2 data', data
+                    proxy.emit 'data', data
+
             mainData = [0..20]
-            reader = es.readable (cnt, callback) ->
-                if cnt == mainData.length
-                    return @emit 'end'
+            audits = es.readArray mainData
 
-                callback null, mainData[cnt]
-
-            writer = es.through (data) ->
-                console.log "got #{data}"
-
-            dupe= es.duplex writer, reader
-            ds = mdm1.createWriteStream 'reply'
+            
             thru = es.through (data) ->
-                ds.write data*2
+                console.log 'thru', data
+                @emit 'data', data
 
-            reader.on 'end', -> done()
-            dupe.pipe(thru).pipe(mdm1).pipe(dupe)
+            fine = es.through (data) ->
+                console.log 'fine', data
+
+            proxy = es.through (num) ->
+                ds = mdm1.createStream 'nums'
+                ds.write num
+
+            proxy.on 'data', (data) ->
+                console.log 'proxydata', data
+
+            mdm1.pipe(thru).pipe(mdm2).pipe(fine)
+
+            audits.pipe proxy
 
         
         it 'should be happy', (done) ->
@@ -106,6 +94,9 @@ describe 'muxer', ->
                 
             main.pipe(ck)
             main.write ['select', 11]
+
+            
+
         it 'should support tcp', (done) ->
             parseCommand = require '../redis-command-parser'
             reply = es.through (reply) ->
