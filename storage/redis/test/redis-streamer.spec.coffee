@@ -1,6 +1,7 @@
 describe 'redis-streamer', ->
     es = require 'event-stream'
     {Redis} = require '../redis-streamer'
+    ReadableArray = require '../readable-array'
     Duplex = require '../node_modules/readable-stream/duplex'
     Transform = require '../node_modules/readable-stream/transform'
     Writable = require '../node_modules/readable-stream/writable'
@@ -38,36 +39,23 @@ describe 'redis-streamer', ->
         it 'should be ok', (done) ->
             @timeout 0
             client = new Redis {db: 11}
-            class Pump extends Readable
-                constructor: (@arr=[])->
-                    @cmdFn = client.formatCommand()
-                    all = @arr.map (i) => @cmdFn i
-                    @buffer = new Buffer all
-                    @start = 0
-                    super
-                _read: (n, cb) ->
-                    if @start >= @buffer.length
-                        return cb()
-                    end = if n > @buffer.length then @buffer.length else n
-                    data = new Buffer(end)
-                    @buffer.copy data, 0, @start, end
-                    @start+=n
-                    cb null, data
-
+            cmdFn = client.formatCommand()
+            cmds = [0...20].map (r) -> cmdFn [
+                'set'
+                'testload'
+                r+''
+            ]
+            pumper = new ReadableArray cmds
             class Ck extends Writable
                 constructor: ->
                     super
                 _write: (chunk, cb) ->
                     reply = chunk.toString()
+                    console.log 'reply', reply
 
-            pumper = new Pump [0...20].map (r) -> [
-                'set'
-                'testload'
-                r+''
-            ]
             stream = client.stream()
             stream.on 'finish', ->
-                pumper = new Pump [['get', 'testload']]
+                pumper = new ReadableArray [['get', 'testload']]
                 stream = client.stream()
                 ck = new Ck()
                 #ck.on 'finish', -> done()

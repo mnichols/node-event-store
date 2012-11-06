@@ -2,6 +2,7 @@ es = require 'event-stream'
 net = require 'net'
 replyParser = require './redis-reply-parser'
 parseCommand = require './redis-command-parser'
+{StringDecoder} = require 'string_decoder'
 Duplex = require './node_modules/readable-stream/duplex'
 Transform = require './node_modules/readable-stream/transform'
 
@@ -44,6 +45,7 @@ Redis::stream = (cmd, key, curry) ->
     class Xform extends Transform
         constructor: (@curry=[]) ->
             super {lowWaterMark: 0}
+            @decoder = new StringDecoder 'utf8'
         _transform: (args=[], outputFn, cb) ->
             #accept arrays as data for `write`
             cmd = if @curry.length then  parseCommand(concat [], @curry) else ''
@@ -52,6 +54,8 @@ Redis::stream = (cmd, key, curry) ->
             #parsed = new Buffer(parseCommand elems)
             #select db
             parsed = Buffer.concat [ new Buffer(select), elems]
+
+            console.log 'cmd', @decoder.write(parsed)
             outputFn parsed
             cb()
 
@@ -59,17 +63,24 @@ Redis::stream = (cmd, key, curry) ->
         constructor: ->
             super {lowWaterMark: 0}
         _transform: (reply, outputFn, cb) ->
-            unless passes
-                reply = new Buffer(reply.toString().replace(select, ''))
-                passes++
-            outputFn reply if reply.length>0
+            passes++
+            if passes==1
+                return cb()
+            console.log 'outputing', reply.toString()
+            outputFn(new Buffer(reply.toString()))
             cb()
 
+    
     class Split extends Transform
         constructor: ->
-            super {lowWaterMark: 0}
+            super
+            @decoder = new StringDecoder 'utf8'
         _transform: (chunk, outputFn, cb) ->
-            outputFn(new Buffer(data)) for data in chunk.toString().split('\r\n')
+            str = @decoder.write(chunk)
+            bufs= []
+            arr = str.split('\r\n').map (r) ->
+                new Buffer r
+            outputFn a for a in arr
             cb()
 
 
