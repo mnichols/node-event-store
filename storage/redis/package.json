@@ -22,6 +22,7 @@
         ,"mux-demux": "latest"
         ,"generic-pool": "latest"
         ,"proxy": "latest"
+        ,"readable-stream": "~0.0.3"
     }
     ,"devDependencies" : {
         "mocha": "latest"

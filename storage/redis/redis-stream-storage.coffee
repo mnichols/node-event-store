@@ -2,6 +2,7 @@ es = require 'event-stream'
 {Stream} = require 'stream'
 {EventEmitter2} = require 'eventemitter2'
 util = require 'util'
+Duplex = require './node_modules/readable-stream/duplex'
 
 concurrencyStream = require './concurrency-stream'
 
@@ -37,6 +38,37 @@ module.exports =
 
         util.inherits Storage, EventEmitter2
 
+        _createReader = (opts={}) ->
+            defaultOpts = 
+                enrich: false
+                flatten: true
+                emitStreamHeader: false
+            (opts[k]=defaultOpts[k]) for k,v of defaultOpts when !opts[k]
+            args = (cmd, filter) -> 
+                id = cfg.getCommitsKey(filter.streamId)
+                arr = [id, filter.minRevision, filter.maxRevision]
+                arr.unshift cmd
+                arr
+            enrich = (data) ->
+                events = data.payload.map (e) ->
+                    (e[k]=data[k]) for k,v of data when k!='payload'
+                    e
+                return events
+            countStream = cfg.client.stream()
+            rangeStream = cfg.client.stream()
+            class Reader extends Duplex
+                _write: (filter, cb) ->
+
+                _read: (n, cb) ->
+                    #            Reader = (opts) ->
+                    #                Duplex.apply @,arguments
+                    #            Reader::_write = (filter, cb) ->
+                    #                console.log '_write', filter
+                    #            Reader::_read = (n, cb) ->
+                    #                console.log '_read'
+                    #                cb null, 'data'
+            new Reader opts
+
         ###
         * reader implementation for Redis
         * this streams events out of Redis storage
@@ -45,7 +77,7 @@ module.exports =
         *     @params {Boolean} [flatten=true] Whether to emit events in groups by commit, or singly
         *     @params {Boolean} [emitStreamHeader=false] Whether to emit a single 'data' event before streaming committed event data
         ###
-        _createReader = (opts = {}) ->
+        _createReader2 = (opts = {}) ->
             defaultOpts = 
                 enrich: false
                 flatten: true

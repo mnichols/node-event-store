@@ -92,6 +92,7 @@ module.exports =
                         minRevision: Number(auditEntry.streamRevision)
                         maxRevision: Number(auditEntry.streamRevision)
 
+                    console.log 'filter', filter
                     next null, filter
 
                 done = es.through ->

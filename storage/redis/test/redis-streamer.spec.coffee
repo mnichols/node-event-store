@@ -1,6 +1,11 @@
 describe 'redis-streamer', ->
     es = require 'event-stream'
     {Redis} = require '../redis-streamer'
+    Duplex = require '../node_modules/readable-stream/duplex'
+    Transform = require '../node_modules/readable-stream/transform'
+    Writable = require '../node_modules/readable-stream/writable'
+    Readable = require 'readable-stream'
+
     describe 'simple', ->
         it 'should work', (done) ->
             sut = new Redis {db: 11}
@@ -33,30 +38,44 @@ describe 'redis-streamer', ->
         it 'should be ok', (done) ->
             @timeout 0
             client = new Redis {db: 11}
-            range = [0...20000]
-            ticks = 0
+            class Pump extends Readable
+                constructor: (@arr=[])->
+                    @cmdFn = client.formatCommand()
+                    all = @arr.map (i) => @cmdFn i
+                    @buffer = new Buffer all
+                    @start = 0
+                    super
+                _read: (n, cb) ->
+                    if @start >= @buffer.length
+                        return cb()
+                    end = if n > @buffer.length then @buffer.length else n
+                    data = new Buffer(end)
+                    @buffer.copy data, 0, @start, end
+                    @start+=n
+                    cb null, data
+
+            class Ck extends Writable
+                constructor: ->
+                    super
+                _write: (chunk, cb) ->
+                    reply = chunk.toString()
+
+            pumper = new Pump [0...20].map (r) -> [
+                'set'
+                'testload'
+                r+''
+            ]
             stream = client.stream()
-            ck = es.through (reply) ->
-                
-                ticks++
-                #console.log 'ckreply', "#{ticks} #{reply}"
-            pumper = es.readable (ct, cb) ->
-                return pumper.emit 'end' if ct==range.length
-                #console.log 'ct', ct
-                cb null, ['set', 'testload', range[ct]]
-            stream.on 'error', (err) ->
-                console.error 'ticks', ticks
-                done err
-            ck.on 'end', -> 
-                console.log 'ticked', ticks
-                #may fail on higher counts
-                #if you listen to `pumper` end
-                #b/c ticks is incremented in pipe
-                ticks.should.equal range.length
+            stream.on 'finish', ->
+                pumper = new Pump [['get', 'testload']]
+                stream = client.stream()
+                ck = new Ck()
+                #ck.on 'finish', -> done()
+                pumper.pipe(stream).pipe(ck)
 
-                done()
 
-            pumper.pipe(stream).pipe(ck)
+
+            pumper.pipe(stream)
 
 
     describe 'sortedsets', ->

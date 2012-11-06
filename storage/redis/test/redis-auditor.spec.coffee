@@ -128,7 +128,6 @@ describe 'redis-auditor', ->
                 stream = @auditor.createEventStream [start, end]
                 vals = []
                 stream.on 'data', (data) ->
-                    console.log 'audit', data
                     vals.push data
                 stream.on 'end', =>
                     console.log 'vals', vals
