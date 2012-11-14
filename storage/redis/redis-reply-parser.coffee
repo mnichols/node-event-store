@@ -17,6 +17,7 @@ module.exports = ReplyParser = (stream, cb = ->) ->
         @emit 'done' if @done
     
     @_transform =  (chunk, outputFn, cb = ->) =>
+        multiBulk = null
         replyCount = 1
         bulk = false
         all = sd.write chunk #string reply
@@ -44,8 +45,10 @@ module.exports = ReplyParser = (stream, cb = ->) ->
                     #next()
                 when '-'
                     next new Error content
+                # multi-bulk 
                 when '*'
                     replyCount = parseInt(content)*2
+                    multiBulk = []
                     #next()
                 when '~'
                     replyCount++
@@ -53,9 +56,13 @@ module.exports = ReplyParser = (stream, cb = ->) ->
                 else
                     unless bulk
                         throw new Error "bad reply: #{reply}"
-                    outputFn new Buffer(reply)
-                    next() if replyCount<=0
-
+                    multiBulk.push reply if multiBulk
+                    if replyCount<=0
+                        #output = if multiBulk then Buffer.concat(multiBulk) else new Buffer(reply)
+                        output = multiBulk or reply
+                        console.log 'outputting', output
+                        outputFn output
+                        return next()
 
     @
 

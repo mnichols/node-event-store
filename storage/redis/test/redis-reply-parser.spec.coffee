@@ -134,6 +134,7 @@ describe 'redis-reply-parser', ->
                 ]
             arr = new ReadableArray [response]
             ck = new Ck (reply) ->
+                console.log reply.toString()
                 reply.should.equal replies.slice()
                 done() if replies.length==0
             parser = new ReplyParser()
